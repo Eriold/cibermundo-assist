@@ -89,7 +89,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
     // Verificar si tracking ya existe
     const existing = get<{ tracking_number: string; scanned_by: string }>(
       "SELECT tracking_number, scanned_by FROM shipments WHERE tracking_number = :trackingNumber",
-      { trackingNumber }
+      { ":trackingNumber": trackingNumber }
     );
 
     if (existing) {
@@ -101,10 +101,10 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
           office_status = :status
         WHERE tracking_number = :trackingNumber`,
         {
-          now,
-          scannedBy,
-          status,
-          trackingNumber,
+          ":now": now,
+          ":scannedBy": scannedBy,
+          ":status": status,
+          ":trackingNumber": trackingNumber,
         }
       );
 
@@ -140,12 +140,12 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
       )
       `,
       {
-        trackingNumber,
-        now,
-        scannedBy,
-        deliveryType,
-        zoneId: zoneId ?? null,
-        status,
+        ":trackingNumber": trackingNumber,
+        ":now": now,
+        ":scannedBy": scannedBy,
+        ":deliveryType": deliveryType,
+        ":zoneId": zoneId ?? null,
+        ":status": status,
       }
     );
 
@@ -157,7 +157,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
          WHERE tracking_number = :trackingNumber 
          AND type = :type 
          AND status IN ('PENDING', 'RUNNING')`,
-        { trackingNumber, type: jobType }
+        { ":trackingNumber": trackingNumber, ":type": jobType }
       );
 
       // Solo crear si no existe un job activo del mismo tipo
@@ -168,9 +168,9 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
           VALUES (:type, :trackingNumber, 'PENDING', :now, :now, :now)
           `,
           {
-            type: jobType,
-            trackingNumber,
-            now,
+            ":type": jobType,
+            ":trackingNumber": trackingNumber,
+            ":now": now,
           }
         );
       }
