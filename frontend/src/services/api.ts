@@ -10,9 +10,9 @@ const api = axios.create({
 });
 
 export interface ScanPayload {
-  tracking_number: string;
-  scanned_by: string; // "Melissa" por ahora
-  delivery_type: string; // Tipo de paquete (Domi, Oficina)
+  trackingNumber: string;
+  scannedBy: string; // "Melissa" por ahora
+  deliveryType: string; // "LOCAL" o "ZONA"
 }
 
 /**

@@ -40,7 +40,7 @@ export function useSync() {
   }, []);
 
   // Función para procesar un scan y manejar si hay red o no
-  const processScan = async (tracking_number: string, scanned_by: string = "Melissa", delivery_type: string = "OFICINA") => {
+  const processScan = async (tracking_number: string, scanned_by: string = "Melissa", delivery_type: string = "LOCAL") => {
     
     // Primero, guardamos SIEMPRE en local (Offline-first architecture)
     const id = await db.scans.add({
@@ -67,9 +67,9 @@ export function useSync() {
 
     try {
       await registerScan({
-        tracking_number: scan.tracking_number,
-        scanned_by: scan.scanned_by,
-        delivery_type: scan.delivery_type
+        trackingNumber: scan.tracking_number,
+        scannedBy: scan.scanned_by,
+        deliveryType: scan.delivery_type
       });
 
       await db.scans.update(id, { status: 'SYNCED' });
