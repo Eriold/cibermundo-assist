@@ -76,8 +76,14 @@ export function useSync() {
 
     } catch (err: any) {
       console.warn("Fallo sync individual:", err);
+      const attempts = (scan.sync_attempts || 0) + 1;
+      // Si falla demasiadas veces, marcar como FAILED para romper loops infinitos
+      // O si es un error 400 (Bad Request), marcar de inmediato como fallido ya que no se va a arreglar solo
+      const isBadRequest = err.response?.status === 400;
+
       await db.scans.update(id, { 
-        sync_attempts: scan.sync_attempts + 1,
+        sync_attempts: attempts,
+        status: (attempts >= 5 || isBadRequest) ? 'ERROR' : 'PENDING',
         error_message: err.message || "Error desconocido"
       });
     }
@@ -104,10 +110,10 @@ export function useSync() {
 
   // Si recuperamos conexión, automágicamente sincronizar todo
   useEffect(() => {
-    if (isOnline && pendingCount > 0) {
+    if (isOnline && pendingCount > 0 && !isSyncing) {
       syncPending();
     }
-  }, [isOnline, pendingCount, syncPending]);
+  }, [isOnline, pendingCount, syncPending, isSyncing]);
 
 
   return {
