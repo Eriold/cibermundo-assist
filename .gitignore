@@ -39,3 +39,6 @@ dist-ssr
 # Coverage & Build
 coverage/
 build/
+
+# Agent Memory (Local context)
+_agent/
