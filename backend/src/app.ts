@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -20,6 +21,7 @@ const openApiSpec = JSON.parse(
 export function createApp() {
   const app = express();
 
+  app.use(cors());
   app.use(express.json());
 
   // Swagger UI

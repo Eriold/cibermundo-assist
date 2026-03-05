@@ -5,6 +5,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), basicSsl()],
+  envDir: '../', // Leer el .env global de la raiz del proyecto
   server: {
     host: true,
   }
