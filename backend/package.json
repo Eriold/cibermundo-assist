@@ -1,0 +1,29 @@
+{
+  "name": "@interrpa/backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "env:init": "node ../../scripts/copy-env.mjs .",
+    "doc": "tsx src/doc.ts"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "puppeteer": "^24.35.0",
+    "sql.js": "^1.13.0",
+    "swagger-ui-express": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.6",
+    "@types/sql.js": "^1.4.9",
+    "@types/swagger-ui-express": "^4.1.8",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

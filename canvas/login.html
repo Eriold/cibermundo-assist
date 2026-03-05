@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Iniciar Sesión - Operaciones</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;500;600;700&amp;family=Noto+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f9f506",
+                        "background-light": "#f8f8f5",
+                        "background-dark": "#23220f",
+                        "neutral-dark": "#181811",
+                        "neutral-light": "#8c8b5f",
+                        "border-light": "#e6e6db",
+                        "border-dark": "#3e3d24",
+                        "error-light": "#fecaca",
+                        "error-text": "#991b1b"
+                    },
+                    fontFamily: {
+                        "display": ["Spline Sans", "sans-serif"],
+                        "body": ["Noto Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased transition-colors duration-200">
+<div class="relative flex min-h-screen w-full flex-col overflow-hidden mx-auto max-w-md bg-white dark:bg-[#1a1a12] shadow-sm">
+<!-- Header Section -->
+<header class="flex flex-col items-center pt-12 pb-6 px-6">
+<div class="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-neutral-dark mb-6 shadow-lg rotate-3 transform transition-transform hover:rotate-0">
+<span class="material-symbols-outlined text-4xl">qr_code_scanner</span>
+</div>
+<h2 class="text-neutral-light dark:text-gray-400 text-sm font-semibold uppercase tracking-wider mb-1">Operaciones</h2>
+<h1 class="text-neutral-dark dark:text-white text-3xl font-bold leading-tight text-center">Bienvenido Operario</h1>
+</header>
+<!-- Main Form Content -->
+<main class="flex-1 flex flex-col px-6">
+<!-- Error Banner (Hidden by default, showing static example for context design) -->
+<!-- Uncomment to see style: 
+            <div class="mb-6 flex items-center gap-3 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-4 text-red-800 dark:text-red-200">
+                <span class="material-symbols-outlined">error</span>
+                <p class="text-sm font-medium">Credenciales inválidas. Intente nuevamente.</p>
+            </div>
+            -->
+<form class="space-y-6" onsubmit="event.preventDefault();">
+<!-- Usuario Field -->
+<div class="space-y-2 group">
+<label class="text-neutral-dark dark:text-gray-200 text-sm font-medium pl-1" for="username">ID de Operario</label>
+<div class="relative flex items-center">
+<div class="absolute left-4 text-neutral-light dark:text-gray-500 pointer-events-none flex items-center">
+<span class="material-symbols-outlined">badge</span>
+</div>
+<input class="w-full rounded-full border border-border-light dark:border-border-dark bg-white dark:bg-[#2c2b1f] text-neutral-dark dark:text-white pl-12 pr-4 py-4 text-base focus:border-neutral-dark dark:focus:border-primary focus:ring-1 focus:ring-neutral-dark dark:focus:ring-primary outline-none transition-all placeholder:text-neutral-light/70 dark:placeholder:text-gray-600" id="username" placeholder="Ej. OP-4832" type="text"/>
+</div>
+</div>
+<!-- Contraseña Field -->
+<div class="space-y-2">
+<label class="text-neutral-dark dark:text-gray-200 text-sm font-medium pl-1" for="password">Contraseña</label>
+<div class="relative flex items-center">
+<div class="absolute left-4 text-neutral-light dark:text-gray-500 pointer-events-none flex items-center">
+<span class="material-symbols-outlined">lock</span>
+</div>
+<input class="w-full rounded-full border border-border-light dark:border-border-dark bg-white dark:bg-[#2c2b1f] text-neutral-dark dark:text-white pl-12 pr-12 py-4 text-base focus:border-neutral-dark dark:focus:border-primary focus:ring-1 focus:ring-neutral-dark dark:focus:ring-primary outline-none transition-all placeholder:text-neutral-light/70 dark:placeholder:text-gray-600" id="password" placeholder="••••••••" type="password"/>
+<button class="absolute right-4 text-neutral-light dark:text-gray-500 hover:text-neutral-dark dark:hover:text-white transition-colors flex items-center justify-center p-1 rounded-full focus:outline-none focus:bg-gray-100 dark:focus:bg-white/10" type="button">
+<span class="material-symbols-outlined">visibility_off</span>
+</button>
+</div>
+</div>
+<!-- Spacer -->
+<div class="h-4"></div>
+<!-- Action Button -->
+<button class="relative w-full overflow-hidden rounded-full bg-primary py-4 px-6 text-neutral-dark shadow-md transition-transform hover:scale-[1.01] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:focus:ring-offset-[#1a1a12]" type="submit">
+<div class="flex items-center justify-center gap-2">
+<span class="text-base font-bold tracking-wide uppercase">Iniciar Sesión</span>
+<span class="material-symbols-outlined text-lg font-bold">arrow_forward</span>
+</div>
+</button>
+</form>
+<div class="mt-8 flex flex-col items-center gap-4">
+<button class="text-sm font-medium text-neutral-light dark:text-gray-400 hover:text-neutral-dark dark:hover:text-white underline decoration-dashed underline-offset-4 transition-colors">
+                    ¿Problemas de acceso?
+                </button>
+</div>
+</main>
+<!-- Footer -->
+<footer class="mt-auto py-6 text-center">
+<p class="text-xs text-neutral-light/60 dark:text-gray-600">
+                v1.0.2 • Solo uso interno
+            </p>
+</footer>
+</div>
+</body></html>

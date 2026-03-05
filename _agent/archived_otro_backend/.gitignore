@@ -1,0 +1,12 @@
+node_modules/
+**/node_modules/
+dist/
+build/
+.env
+.env.*
+data/*
+data/app.db
+data/app.db-journal
+data/logs/
+app/worker/pw-after-goto.png
+.venv/

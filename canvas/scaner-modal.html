@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Historial Rápido de Escaneos</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f9f506",
+                        "background-light": "#f8f8f5",
+                        "background-dark": "#23220f",
+                    },
+                    fontFamily: {
+                        "display": ["Spline Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-gray-900 font-display antialiased overflow-hidden select-none h-screen w-full">
+<!-- Camera View Context Background -->
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-30 grayscale mix-blend-overlay" data-alt="Blurred industrial warehouse shelves background representing camera view" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQ_jk2hNHDGE8NcY0vwiHWVTJqM9WNPxZkUYmfWQG27__QHnsYPuFSwKG3P6Zz_BotZEbcYcQUn_d_32gS9fxiNAWX-WYEp4tSM_DB2s0s5-D4l8M5TDiRvCNATKtlnC7-Xe2YCZZSwWA4OOZrqxGIzC-oE8O1s12UG8CHiUEtKWE1PhebINn_SRhBK_4fK_nngK6yE-zKjEv-haG3x8_8mzYKvg53Kq-Ki6OtATWuOFCXO9ah2qjVrkfDnIqWqvhq6rlJqRnHQt0"/>
+<!-- Scanner Overlay Recticle (Contextual Hint) -->
+<div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-48 rounded-2xl border-2 border-white/20 flex flex-col justify-between p-4">
+<div class="flex justify-between w-full">
+<div class="w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+<div class="w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+</div>
+<div class="flex justify-between w-full">
+<div class="w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+<div class="w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+</div>
+</div>
+</div>
+<!-- Bottom Sheet Container -->
+<div class="absolute bottom-0 left-0 w-full z-10 flex flex-col h-[65vh] transition-transform duration-300 ease-out translate-y-0 bg-background-light dark:bg-background-dark rounded-t-xl shadow-[0_-8px_30px_rgba(0,0,0,0.3)]">
+<!-- Handle -->
+<div class="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none">
+<div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+</div>
+<!-- Header -->
+<div class="px-6 pt-4 pb-2 flex items-center justify-between shrink-0">
+<h2 class="text-[#181811] dark:text-white text-[24px] font-bold leading-tight tracking-tight">
+                Historial Reciente
+            </h2>
+<button class="text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-white/10">
+                Limpiar lista
+            </button>
+</div>
+<!-- List Content -->
+<div class="flex-1 overflow-y-auto no-scrollbar px-4 pt-2 pb-8 space-y-3">
+<!-- Item 1: Pending (Primary Focus) -->
+<div class="relative group flex items-center gap-3 bg-white dark:bg-[#2f2e1a] p-4 rounded-lg shadow-sm border-l-[6px] border-primary transition-all active:scale-[0.98]">
+<div class="flex-shrink-0 size-10 rounded-full bg-primary flex items-center justify-center text-black">
+<span class="material-symbols-outlined text-[20px]">qr_code_scanner</span>
+</div>
+<div class="flex-1 min-w-0 flex flex-col justify-center">
+<div class="flex items-center gap-2 mb-1">
+<p class="text-[#181811] dark:text-white text-lg font-bold font-mono tracking-tight leading-none truncate">...X9902</p>
+<span class="bg-primary text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Pendiente</span>
+</div>
+<p class="text-gray-500 dark:text-gray-400 text-xs font-medium">14:32 • Esperando sincronización</p>
+</div>
+<div class="shrink-0 flex gap-1">
+<button aria-label="Reintentar" class="size-9 rounded-full bg-gray-100 dark:bg-black/20 flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-black transition-colors">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+</button>
+</div>
+</div>
+<!-- Item 2: Registered (Success) -->
+<div class="relative group flex items-center gap-3 bg-white dark:bg-[#2f2e1a] p-4 rounded-lg shadow-sm border-l-[6px] border-[#181811] dark:border-white/20 opacity-90 transition-all active:scale-[0.98]">
+<div class="flex-shrink-0 size-10 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-[#181811] dark:text-white">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</div>
+<div class="flex-1 min-w-0 flex flex-col justify-center">
+<div class="flex items-center gap-2 mb-1">
+<p class="text-[#181811] dark:text-white text-lg font-semibold font-mono tracking-tight leading-none truncate">...B1123</p>
+<span class="bg-[#181811] dark:bg-white text-white dark:text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Registrado</span>
+</div>
+<p class="text-gray-500 dark:text-gray-400 text-xs font-medium">14:30 • Escaneo exitoso</p>
+</div>
+<div class="shrink-0 flex gap-1">
+<button aria-label="Copiar" class="size-9 rounded-full bg-transparent flex items-center justify-center text-gray-400 hover:text-[#181811] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Item 3: Existing (Neutral/Warning) -->
+<div class="relative group flex items-center gap-3 bg-white dark:bg-[#2f2e1a] p-4 rounded-lg shadow-sm border-l-[6px] border-gray-300 dark:border-gray-600 opacity-75 transition-all active:scale-[0.98]">
+<div class="flex-shrink-0 size-10 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-gray-400">
+<span class="material-symbols-outlined text-[20px]">inventory_2</span>
+</div>
+<div class="flex-1 min-w-0 flex flex-col justify-center">
+<div class="flex items-center gap-2 mb-1">
+<p class="text-[#181811] dark:text-gray-300 text-lg font-medium font-mono tracking-tight leading-none truncate">...C5541</p>
+<span class="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Existente</span>
+</div>
+<p class="text-gray-500 dark:text-gray-500 text-xs font-medium">14:28 • Lote anterior</p>
+</div>
+<div class="shrink-0 flex gap-1">
+<button aria-label="Detalles" class="size-9 rounded-full bg-transparent flex items-center justify-center text-gray-300 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</button>
+</div>
+</div>
+<!-- Item 4: Registered (Success) -->
+<div class="relative group flex items-center gap-3 bg-white dark:bg-[#2f2e1a] p-4 rounded-lg shadow-sm border-l-[6px] border-[#181811] dark:border-white/20 opacity-75 transition-all active:scale-[0.98]">
+<div class="flex-shrink-0 size-10 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-[#181811] dark:text-white">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</div>
+<div class="flex-1 min-w-0 flex flex-col justify-center">
+<div class="flex items-center gap-2 mb-1">
+<p class="text-[#181811] dark:text-white text-lg font-semibold font-mono tracking-tight leading-none truncate">...A8891</p>
+<span class="bg-[#181811] dark:bg-white text-white dark:text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Registrado</span>
+</div>
+<p class="text-gray-500 dark:text-gray-400 text-xs font-medium">14:15 • Escaneo exitoso</p>
+</div>
+<div class="shrink-0 flex gap-1">
+<button aria-label="Copiar" class="size-9 rounded-full bg-transparent flex items-center justify-center text-gray-400 hover:text-[#181811] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Item 5: Registered (Success) -->
+<div class="relative group flex items-center gap-3 bg-white dark:bg-[#2f2e1a] p-4 rounded-lg shadow-sm border-l-[6px] border-[#181811] dark:border-white/20 opacity-60 transition-all active:scale-[0.98]">
+<div class="flex-shrink-0 size-10 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-[#181811] dark:text-white">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</div>
+<div class="flex-1 min-w-0 flex flex-col justify-center">
+<div class="flex items-center gap-2 mb-1">
+<p class="text-[#181811] dark:text-white text-lg font-semibold font-mono tracking-tight leading-none truncate">...D2020</p>
+<span class="bg-[#181811] dark:bg-white text-white dark:text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Registrado</span>
+</div>
+<p class="text-gray-500 dark:text-gray-400 text-xs font-medium">14:02 • Escaneo exitoso</p>
+</div>
+<div class="shrink-0 flex gap-1">
+<button aria-label="Copiar" class="size-9 rounded-full bg-transparent flex items-center justify-center text-gray-400 hover:text-[#181811] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</div>
+<div class="h-6 w-full"></div> <!-- Bottom Spacer for safe area -->
+</div>
+</div>
+</body></html>

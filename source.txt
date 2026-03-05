@@ -1,0 +1,23 @@
+function (source, callbackFn) {
+        return __awaiter(this, void 0, void 0, function () {
+            var element, timeout;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        BrowserCodeReader.checkCallbackFnOrThrow(callbackFn);
+                        if (!source) {
+                            throw new library_1.ArgumentException('A video element must be provided.');
+                        }
+                        element = BrowserCodeReader.prepareVideoElement(source);
+                        timeout = this.options.tryPlayVideoTimeout;
+                        // plays the video
+                        return [4 /*yield*/, BrowserCodeReader.playVideoOnLoadAsync(element, timeout)];
+                    case 1:
+                        // plays the video
+                        _a.sent();
+                        // starts decoding after played the video
+                        return [2 /*return*/, this.scan(element, callbackFn)];
+                }
+            });
+        });
+    }

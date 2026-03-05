@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Selección de Zona - Scanner App</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;500;600;700&amp;family=Noto+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f9f506",
+                        "primary-dark": "#d4d000",
+                        "background-light": "#f8f8f5",
+                        "background-dark": "#23220f",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#2c2b15",
+                    },
+                    fontFamily: {
+                        "display": ["Spline Sans", "sans-serif"],
+                        "body": ["Noto Sans", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem", 
+                        "lg": "2rem", 
+                        "xl": "3rem", 
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: "Spline Sans", sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar hide for cleaner UI */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-[#181811] dark:text-white min-h-screen flex flex-col transition-colors duration-200">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-white/10">
+<div class="flex items-center gap-3">
+<div class="bg-surface-light dark:bg-surface-dark p-2 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
+<span class="material-symbols-outlined text-[#181811] dark:text-primary">qr_code_scanner</span>
+</div>
+<h2 class="text-lg font-bold tracking-tight">Scanner Pro</h2>
+</div>
+<button class="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+<img alt="Operator profile picture" class="size-8 rounded-full object-cover border border-gray-200 dark:border-white/10" data-alt="Close up portrait of a man" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPY4z8keHFBBYWKQUR1WOGresZIIjMxiZk8iddQXscce2oNcyGnGJLn3ElxB5gOGE_vQEIaBq-EEt0ZtbQyZRZcz_TydNJNYXggO5qAOUfYPs-UZVERvG_T7PgSFqAf_-WMMgdWjcFdHTsHDurw3O1y1he7IsxSMaovOUVfn0wRuT4js9JjsFG9Pep4IP9tcwefeFyTqMrODXaaoJLyze4F3v3aahqL82fBmVDlfgMZXBCYJvBLa2UF2dQ8HJ3qf5WbVTeS8xtCDk"/>
+</button>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col px-4 pt-6 pb-8 max-w-md mx-auto w-full">
+<!-- Headline Section -->
+<div class="mb-8">
+<h1 class="text-[32px] font-bold leading-[1.1] mb-2 tracking-tight">Seleccione su Zona</h1>
+<p class="text-gray-600 dark:text-gray-300 text-base font-normal leading-relaxed">
+                Indique donde está operando para iniciar la sesión de escaneo.
+            </p>
+</div>
+<!-- Zone Selection List -->
+<div class="flex flex-col gap-4 w-full">
+<!-- Card 1: Local -->
+<button class="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left">
+<div class="flex items-center justify-center shrink-0 size-16 rounded-full bg-primary text-black">
+<span class="material-symbols-outlined text-[28px]">storefront</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<span class="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Local</span>
+<span class="text-sm text-gray-500 dark:text-gray-400 truncate">Tienda Principal</span>
+</div>
+<div class="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
+</div>
+</button>
+<!-- Card 2: Zona A -->
+<button class="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left">
+<div class="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-[28px]">inventory_2</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<span class="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona A</span>
+<span class="text-sm text-gray-500 dark:text-gray-400 truncate">Almacén General</span>
+</div>
+<div class="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
+</div>
+</button>
+<!-- Card 3: Zona B -->
+<button class="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left">
+<div class="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-[28px]">shelves</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<span class="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona B</span>
+<span class="text-sm text-gray-500 dark:text-gray-400 truncate">Recepción de Carga</span>
+</div>
+<div class="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
+</div>
+</button>
+<!-- Card 4: Zona C -->
+<button class="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left">
+<div class="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-[28px]">conveyor_belt</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<span class="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona C</span>
+<span class="text-sm text-gray-500 dark:text-gray-400 truncate">Procesamiento</span>
+</div>
+<div class="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
+</div>
+</button>
+<!-- Card 5: Zona D -->
+<button class="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left">
+<div class="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-[28px]">forklift</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<span class="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona D</span>
+<span class="text-sm text-gray-500 dark:text-gray-400 truncate">Logística Externa</span>
+</div>
+<div class="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
+</div>
+</button>
+</div>
+</main>
+<!-- Footer Status -->
+<footer class="p-4 flex justify-center pb-8 mt-auto">
+<div class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-surface-dark rounded-full shadow-sm border border-gray-100 dark:border-white/5">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+</span>
+<span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sistema en línea</span>
+</div>
+</footer>
+</body></html>

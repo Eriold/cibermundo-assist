@@ -1,0 +1,477 @@
+### ========================================
+### INTER ISMAEL - TEST ENDPOINTS
+### ========================================
+### Backend runs on http://localhost:3333
+### Run with: npm run dev (in app/backend)
+### Worker runs parallel: npm run dev (in app/worker)
+
+### ========================================
+### 1. ESCANEO (POST /scan)
+### ========================================
+
+### ✅ Escanear guía nueva - LOCAL
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1234567890",
+  "deliveryType": "LOCAL",
+  "zoneId": 1,
+  "scannedBy": "Admin"
+}
+
+### ✅ Escanear guía - Entrega ZONA
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "9876543210",
+  "deliveryType": "ZONA",
+  "zoneId": 5,
+  "scannedBy": "Juan"
+}
+
+### ✅ Rescannear guía existente (UPDATE)
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1234567890",
+  "deliveryType": "LOCAL",
+  "zoneId": 2,
+  "scannedBy": "Maria"
+}
+
+### ❌ Error - tracking muy corto
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "123",
+  "deliveryType": "LOCAL",
+  "scannedBy": "Admin"
+}
+
+### ❌ Error - deliveryType inválido
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1111111111",
+  "deliveryType": "EXPRESS",
+  "scannedBy": "Admin"
+}
+
+### ❌ Error - zoneId no existe
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "2222222222",
+  "deliveryType": "ZONA",
+  "zoneId": 999,
+  "scannedBy": "Admin"
+}
+
+### ========================================
+### 2. MONITOREO DE GUÍAS (Shipments)
+### ========================================
+
+### Listar todas las guías
+GET http://localhost:3333/shipments
+
+### Ver guía específica
+GET http://localhost:3333/shipments/1234567890
+
+### Ver jobs de una guía
+GET http://localhost:3333/shipments/1234567890/jobs
+
+### Exportar a CSV
+GET http://localhost:3333/shipments/export
+
+### Exportar con filtros
+GET http://localhost:3333/shipments/export?status=INGRESADA&zoneId=1
+
+### ========================================
+### 3. GESTIÓN DE ZONAS
+### ========================================
+
+### Listar zonas activas
+GET http://localhost:3333/zones?active=1
+
+### Listar todas las zonas
+GET http://localhost:3333/zones
+
+### Ver zona específica
+GET http://localhost:3333/zones/1
+
+### Crear nueva zona
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": "Zona Centro"
+}
+
+### Crear zona 2
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": "Zona Norte"
+}
+
+### Actualizar zona (nombre + active flag)
+PATCH http://localhost:3333/zones/1
+Content-Type: application/json
+
+{
+  "name": "Zona Centro - Actualizada",
+  "active": true
+}
+
+### Desactivar zona
+PATCH http://localhost:3333/zones/2
+Content-Type: application/json
+
+{
+  "active": false
+}
+
+### ========================================
+### 4. MONITOREO DE JOBS
+### ========================================
+
+### Listar todos los jobs
+GET http://localhost:3333/jobs
+
+### Listar jobs PENDING
+GET http://localhost:3333/jobs?status=PENDING
+
+### Listar jobs FETCH_PAYMENT_API
+GET http://localhost:3333/jobs?type=FETCH_PAYMENT_API
+
+### Listar jobs WAITING_NET (retries)
+GET http://localhost:3333/jobs?status=WAITING_NET
+
+### Ver resumen de jobs (estadísticas)
+GET http://localhost:3333/jobs/summary
+
+### Ver job específico
+GET http://localhost:3333/jobs/1
+
+### Buscar jobs por tracking number
+GET http://localhost:3333/jobs?q=1234567890
+
+### Listar con paginación
+GET http://localhost:3333/jobs?limit=20&offset=0
+
+### Ver todos los jobs de una guía
+GET http://localhost:3333/jobs/tracking/1234567890
+
+### ========================================
+### FLUJO COMPLETO DE PRUEBA
+### ========================================
+
+### Paso 1: Crear zona
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": "Zona Test"
+}
+
+### Paso 2: Escanear guía (crea FETCH_PAYMENT_API job automáticamente)
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "5555555555",
+  "deliveryType": "ZONA",
+  "zoneId": 1,
+  "scannedBy": "Tester"
+}
+
+### Paso 3: Ver jobs pendientes
+GET http://localhost:3333/jobs?status=PENDING
+
+### Paso 4: Esperar 5 segundos (worker poll) → Worker ejecuta FETCH_PAYMENT_API
+### Ver logs en terminal del worker
+
+### Paso 5: Ver resumen actualizado
+GET http://localhost:3333/jobs/summary
+
+### Paso 6: Ver datos de guía actualizados
+GET http://localhost:3333/shipments/5555555555
+
+
+{
+  "trackingNumber": "123456789",
+  "deliveryType": "LOCAL",
+  "scannedBy": "Admin"
+}
+
+### ❌ Error - trackingNumber con letras
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "ABC1234567",
+  "deliveryType": "LOCAL",
+  "scannedBy": "Admin"
+}
+
+### ❌ Error - deliveryType inválido
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1234567890",
+  "deliveryType": "EXPRESS",
+  "scannedBy": "Admin"
+}
+
+### ❌ Error - zoneId negativo
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1234567890",
+  "deliveryType": "ZONA",
+  "zoneId": -1,
+  "scannedBy": "Admin"
+}
+
+### ❌ Error - scannedBy vacío
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1234567890",
+  "deliveryType": "LOCAL",
+  "scannedBy": ""
+}
+
+### ❌ Error - officeStatus inválido
+POST http://localhost:3333/scan
+Content-Type: application/json
+
+{
+  "trackingNumber": "1234567890",
+  "deliveryType": "LOCAL",
+  "scannedBy": "Admin",
+  "officeStatus": "ESTADO_INEXISTENTE"
+}
+
+### ✅ Listar todas las guías
+GET http://localhost:3333/shipments
+
+### ✅ Obtener guía específica
+GET http://localhost:3333/shipments/1234567890
+
+### ✅ Ver jobs de una guía
+GET http://localhost:3333/shipments/1234567890/jobs
+
+### ✅ Ver guías con jobs pendientes
+GET http://localhost:3333/scan/pending
+### ========== ZONES CRUD ==========
+
+### ✅ Listar todas las zonas
+GET http://localhost:3333/zones
+
+### ✅ Listar solo zonas activas
+GET http://localhost:3333/zones?active=1
+
+### ✅ Listar solo zonas inactivas
+GET http://localhost:3333/zones?active=0
+
+### ✅ Crear zona
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": "Centro Histórico"
+}
+
+### ✅ Crear otra zona
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": "Zona Industrial"
+}
+
+### ✅ Obtener zona específica (id=1)
+GET http://localhost:3333/zones/1
+
+### ✅ Actualizar zona - cambiar nombre
+PATCH http://localhost:3333/zones/1
+Content-Type: application/json
+
+{
+  "name": "Centro"
+}
+
+### ✅ Actualizar zona - desactivar
+PATCH http://localhost:3333/zones/2
+Content-Type: application/json
+
+{
+  "active": false
+}
+
+### ✅ Actualizar zona - nombre y activo
+PATCH http://localhost:3333/zones/1
+Content-Type: application/json
+
+{
+  "name": "Zona Central",
+  "active": true
+}
+
+### ❌ Error - nombre vacío
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": ""
+}
+
+### ❌ Error - zona duplicada
+POST http://localhost:3333/zones
+Content-Type: application/json
+
+{
+  "name": "Centro Histórico"
+}
+
+### ❌ Error - zona no existe
+GET http://localhost:3333/zones/9999
+
+### ❌ Error - ID inválido
+GET http://localhost:3333/zones/abc
+
+### ❌ Error - PATCH sin campos
+PATCH http://localhost:3333/zones/1
+Content-Type: application/json
+
+{}
+
+### ❌ Error - PATCH nombre vacío
+PATCH http://localhost:3333/zones/1
+Content-Type: application/json
+
+{
+  "name": "   "
+}
+
+### ========== EXPORT CSV ==========
+
+### ✅ Exportar todas las guías a CSV
+GET http://localhost:3333/shipments/export
+
+### ✅ Exportar filtrando por estado
+GET http://localhost:3333/shipments/export?status=PAQUETE_INGRESADO
+
+### ✅ Exportar filtrando por tipo de entrega
+GET http://localhost:3333/shipments/export?deliveryType=LOCAL
+
+### ✅ Exportar filtrando por zona
+GET http://localhost:3333/shipments/export?zoneId=1
+
+### ✅ Exportar por rango de fechas
+GET http://localhost:3333/shipments/export?from=2025-01-01T00:00:00Z&to=2025-12-31T23:59:59Z
+
+### ✅ Exportar combinando múltiples filtros
+GET http://localhost:3333/shipments/export?status=PAQUETE_CARGADO&deliveryType=ZONA&zoneId=5
+
+### ✅ Exportar por intervalo de fechas (reciente)
+GET http://localhost:3333/shipments/export?from=2026-01-01T00:00:00Z
+
+### ========== JOBS MONITORING ==========
+
+### ✅ Listar todos los jobs
+GET http://localhost:3333/jobs
+
+### ✅ Listar jobs con paginación
+GET http://localhost:3333/jobs?limit=50&offset=0
+
+### ✅ Filtrar jobs por status
+GET http://localhost:3333/jobs?status=PENDING
+
+### ✅ Filtrar jobs por status DONE
+GET http://localhost:3333/jobs?status=DONE
+
+### ✅ Filtrar jobs por status FAILED
+GET http://localhost:3333/jobs?status=FAILED
+
+### ✅ Filtrar jobs por status WAITING_NET
+GET http://localhost:3333/jobs?status=WAITING_NET
+
+### ✅ Filtrar jobs por type
+GET http://localhost:3333/jobs?type=FETCH_PAYMENT_API
+
+### ✅ Filtrar jobs por type FETCH_PORTAL_APX
+GET http://localhost:3333/jobs?type=FETCH_PORTAL_APX
+
+### ✅ Buscar jobs por tracking_number (like)
+GET http://localhost:3333/jobs?q=1234567890
+
+### ✅ Búsqueda parcial de tracking
+GET http://localhost:3333/jobs?q=123456
+
+### ✅ Combinar filtros: status + type
+GET http://localhost:3333/jobs?status=PENDING&type=FETCH_PAYMENT_API
+
+### ✅ Combinar filtros: status + búsqueda
+GET http://localhost:3333/jobs?status=FAILED&q=987654
+
+### ✅ Resumen de jobs por status y type
+GET http://localhost:3333/jobs/summary
+
+### ✅ Obtener un job específico por ID
+GET http://localhost:3333/jobs/1
+
+### ✅ Obtener todos los jobs de un tracking_number
+GET http://localhost:3333/jobs/tracking/1234567890
+
+### ❌ Error - Job ID inválido
+GET http://localhost:3333/jobs/abc
+
+### ❌ Error - Job no existe
+GET http://localhost:3333/jobs/9999
+### ========================================
+### 8. TEST ENDPOINTS (TEMPORAL)
+### ========================================
+
+### ✅ POST /test/payment - Encolar múltiples guías para fetch de pago
+POST http://localhost:3333/test/payment
+Content-Type: application/json
+
+{
+  "trackingNumbers": ["700181356595", "240044203655", "700181335381"]
+}
+
+### ✅ POST /test/payment - Una sola guía
+POST http://localhost:3333/test/payment
+Content-Type: application/json
+
+{
+  "trackingNumbers": ["123456789012"]
+}
+
+### ❌ Error - trackingNumbers no es array
+POST http://localhost:3333/test/payment
+Content-Type: application/json
+
+{
+  "trackingNumbers": "123456789012"
+}
+
+### ❌ Error - Array vacío
+POST http://localhost:3333/test/payment
+Content-Type: application/json
+
+{
+  "trackingNumbers": []
+}

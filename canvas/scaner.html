@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Escáner de Códigos</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f9f506",
+                        "background-light": "#f8f8f5",
+                        "background-dark": "#23220f",
+                        "dark-text": "#181811",
+                    },
+                    fontFamily: {
+                        "display": ["Spline Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    animation: {
+                        'scan': 'scan 2s linear infinite',
+                    },
+                    keyframes: {
+                        scan: {
+                            '0%': { transform: 'translateY(0)' },
+                            '100%': { transform: 'translateY(250px)' },
+                        }
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Hide scrollbar for clean UI */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display h-screen w-full overflow-hidden select-none">
+<div class="relative flex h-full w-full flex-col group/design-root">
+<!-- Camera Feed Background -->
+<div class="absolute inset-0 z-0 bg-black">
+<img alt="Blurred warehouse shelves background representing camera feed" class="w-full h-full object-cover opacity-60" data-alt="Blurred warehouse shelves background representing camera feed" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_3eO4iEhCT72dMcmmatM4C891VWRlb0VD53LoPtBC_LOWxw-4_8gtMEXPH-031IZh-vsZ6CCacOogF10QXvoXcqY0Tq9wpa8gYEJL1kX-ATRP7Hzc06mHS-PkG5mvkAu-ppCNy_QqpPIicxPn3x8hQttEpqg5tXGJ9DrHtFhdig71UM_1PVc0oLf5nJ_831L0RzOCRe95ExjX9knT8d6ciOlDqZ7LSBaRYi4U2y3o8hQBYaocbuMMCt3LCfQsw-G-R9NCbVyJWGw"/>
+<!-- Camera Viewfinder Overlay -->
+<div class="absolute inset-0 bg-black/20 z-0"></div>
+</div>
+<!-- Top Status Bar & Zone Control -->
+<div class="relative z-20 flex flex-col gap-3 p-4 pt-6">
+<!-- Connection Status (ReactionBar adaptation) -->
+<div class="flex justify-between items-center px-2">
+<div class="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+<span class="material-symbols-outlined text-primary text-[16px]">wifi</span>
+<span class="text-white text-xs font-semibold tracking-wide">Conectado</span>
+</div>
+<div class="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+<span class="material-symbols-outlined text-white/80 text-[16px]">cloud_upload</span>
+<span class="text-white/80 text-xs font-semibold tracking-wide">Todo al día</span>
+</div>
+</div>
+<!-- Current Zone Card (TopAppBar adaptation) -->
+<div class="mt-2 bg-white/95 dark:bg-[#181811]/95 backdrop-blur-xl rounded-full p-2 pl-5 pr-2 shadow-lg flex items-center justify-between border border-white/20">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400">Zona Actual</span>
+<h2 class="text-dark-text dark:text-white text-lg font-bold leading-none">Almacén Norte</h2>
+</div>
+<button class="bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-dark-text dark:text-white px-4 py-2 rounded-full text-xs font-bold transition-colors">
+                    Cambiar
+                </button>
+</div>
+</div>
+<!-- Center Scanning Area -->
+<div class="flex-1 relative z-10 flex flex-col items-center justify-center p-8">
+<!-- Feedback Message Toast (Floating) -->
+<!-- Example of Warning State using Primary Color -->
+<div class="absolute top-4 bg-primary text-dark-text px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-bounce">
+<span class="material-symbols-outlined icon-fill">warning</span>
+<span class="font-bold text-sm">Este código ya fue registrado</span>
+</div>
+<!-- Success Message (Hidden for demo, would toggle with JS) -->
+<!-- 
+            <div class="absolute top-4 bg-green-500 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3">
+                <span class="material-symbols-outlined icon-fill">check_circle</span>
+                <span class="font-bold text-sm">Código registrado: #8842</span>
+            </div> 
+            -->
+<!-- Scanner Frame / Reticle -->
+<div class="relative w-64 h-64 border-2 border-white/50 rounded-3xl overflow-hidden shadow-[0_0_0_1000px_rgba(0,0,0,0.5)]">
+<!-- Corner Accents -->
+<div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+<div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+<div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+<div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+<!-- Animated Scan Line -->
+<div class="absolute top-0 left-0 w-full h-0.5 bg-primary shadow-[0_0_15px_rgba(249,245,6,0.8)] animate-scan"></div>
+<!-- Helper Text inside frame -->
+<div class="absolute bottom-4 w-full text-center">
+<p class="text-white/80 text-xs font-medium">Alinea el código aquí</p>
+</div>
+</div>
+</div>
+<!-- Bottom Sheet Controls -->
+<div class="relative z-20 bg-white dark:bg-[#181811] rounded-t-[2rem] shadow-[0_-4px_20px_rgba(0,0,0,0.2)] pb-8 pt-6 px-6">
+<!-- Drag Handle -->
+<div class="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full"></div>
+<div class="flex items-end justify-between mb-6">
+<!-- Session Stats -->
+<div>
+<p class="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wide mb-1">Sesión actual</p>
+<div class="flex items-baseline gap-2">
+<h3 class="text-4xl font-bold text-dark-text dark:text-white">24</h3>
+<span class="text-sm font-medium text-gray-500 dark:text-gray-400">escaneados</span>
+</div>
+<div class="flex items-center gap-1.5 mt-1">
+<span class="w-2 h-2 rounded-full bg-orange-400"></span>
+<p class="text-xs text-orange-600 dark:text-orange-400 font-bold">3 pendientes por subir</p>
+</div>
+</div>
+<!-- Last Scanned Code (Mini preview) -->
+<div class="text-right">
+<p class="text-gray-400 dark:text-gray-500 text-[10px] font-bold uppercase tracking-wide mb-1">Último</p>
+<div class="bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10">
+<p class="font-mono text-sm text-dark-text dark:text-white font-medium">MX-892-L</p>
+</div>
+</div>
+</div>
+<!-- Action Buttons (CameraControl adaptation) -->
+<div class="flex items-center justify-between gap-4">
+<!-- Flashlight -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="flex items-center justify-center rounded-full size-12 bg-gray-100 dark:bg-white/10 text-dark-text dark:text-white group-active:scale-95 transition-transform">
+<span class="material-symbols-outlined">flash_on</span>
+</div>
+<span class="text-[10px] font-bold text-gray-500 dark:text-gray-400">Luz</span>
+</button>
+<!-- Trigger Button (Simulated) -->
+<button class="relative flex items-center justify-center rounded-full size-20 bg-dark-text dark:bg-white shadow-lg group active:scale-95 transition-transform">
+<!-- Ring -->
+<div class="absolute inset-0 rounded-full border-[3px] border-dark-text dark:border-white opacity-30 scale-110"></div>
+<div class="text-white dark:text-dark-text">
+<span class="material-symbols-outlined text-4xl icon-fill">qr_code_scanner</span>
+</div>
+</button>
+<!-- Manual Entry -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="flex items-center justify-center rounded-full size-12 bg-gray-100 dark:bg-white/10 text-dark-text dark:text-white group-active:scale-95 transition-transform">
+<span class="material-symbols-outlined">keyboard</span>
+</div>
+<span class="text-[10px] font-bold text-gray-500 dark:text-gray-400">Manual</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>

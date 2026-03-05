@@ -1,0 +1,722 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "InterRPA Local API",
+    "description": "Sistema offline de gestión de envíos para oficinas locales. Escaneo persistente, cola de trabajos automática y sincronización con APIs públicas.",
+    "version": "0.1.0",
+    "contact": {
+      "name": "InterRPA Team"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3333",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Verifica que el servidor esté en línea y funcionando",
+        "operationId": "getHealth",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "Servidor operativo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "service": {
+                      "type": "string",
+                      "example": "interrpa-backend"
+                    }
+                  },
+                  "required": ["ok", "service"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scan": {
+      "post": {
+        "summary": "Escanear nueva guía",
+        "description": "Registra una nueva guía en el sistema y crea jobs automáticos para fetch de datos de pago y portal APX",
+        "operationId": "postScan",
+        "tags": ["Scan"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "trackingNumber": {
+                    "type": "string",
+                    "description": "Número de guía (10-15 dígitos)",
+                    "example": "1234567890"
+                  },
+                  "deliveryType": {
+                    "type": "string",
+                    "enum": ["LOCAL", "ZONA"],
+                    "description": "Tipo de entrega",
+                    "example": "ZONA"
+                  },
+                  "zoneId": {
+                    "type": ["integer", "null"],
+                    "description": "ID de la zona (requerido si deliveryType=ZONA)",
+                    "example": 1
+                  },
+                  "scannedBy": {
+                    "type": "string",
+                    "description": "Nombre del operario que escanea",
+                    "example": "Juan Pérez"
+                  },
+                  "officeStatus": {
+                    "type": "string",
+                    "enum": [
+                      "PAQUETE_INGRESADO",
+                      "PAQUETE_CARGADO",
+                      "EN_TRANSITO",
+                      "REINTENTO_1",
+                      "REINTENTO_2",
+                      "EN_OFICINA_DIA_1",
+                      "EN_OFICINA_DIA_2",
+                      "EN_OFICINA_DIA_3",
+                      "EN_OFICINA_DIA_4",
+                      "DEVUELTO",
+                      "PENDIENTE_CONSULTA",
+                      "ANOMALIA_DATOS"
+                    ],
+                    "description": "Estado de la guía en la oficina (opcional, por defecto PAQUETE_INGRESADO)",
+                    "example": "PAQUETE_INGRESADO"
+                  }
+                },
+                "required": ["trackingNumber", "deliveryType", "zoneId", "scannedBy"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Guía registrada exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "shipment": {
+                      "type": "object",
+                      "properties": {
+                        "tracking_number": { "type": "string" },
+                        "delivery_type": { "type": "string" },
+                        "zone_id": { "type": ["integer", "null"] },
+                        "scanned_by": { "type": "string" },
+                        "office_status": { "type": "string" },
+                        "scanned_at": { "type": "string", "format": "date-time" },
+                        "updated_at": { "type": "string", "format": "date-time" }
+                      }
+                    },
+                    "jobs_created": {
+                      "type": "array",
+                      "description": "Jobs automáticos generados",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" },
+                    "details": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Guía ya existe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments": {
+      "get": {
+        "summary": "Listar todas las guías",
+        "description": "Obtiene todas las guías registradas en la base de datos, ordenadas por fecha de escaneo descendente",
+        "operationId": "getShipments",
+        "tags": ["Shipments"],
+        "responses": {
+          "200": {
+            "description": "Lista de guías",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tracking_number": { "type": "string" },
+                      "delivery_type": { "type": "string" },
+                      "zone_id": { "type": ["integer", "null"] },
+                      "scanned_by": { "type": "string" },
+                      "office_status": { "type": "string" },
+                      "recipient_name": { "type": ["string", "null"] },
+                      "amount_to_collect": { "type": ["number", "null"] },
+                      "payment_code": { "type": ["string", "null"] },
+                      "scanned_at": { "type": "string", "format": "date-time" },
+                      "updated_at": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/{trackingNumber}": {
+      "get": {
+        "summary": "Obtener guía específica",
+        "description": "Obtiene los detalles de una guía por su número de rastreo",
+        "operationId": "getShipmentByTracking",
+        "tags": ["Shipments"],
+        "parameters": [
+          {
+            "name": "trackingNumber",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Número de rastreo de la guía"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalles de la guía",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tracking_number": { "type": "string" },
+                    "delivery_type": { "type": "string" },
+                    "zone_id": { "type": ["integer", "null"] },
+                    "scanned_by": { "type": "string" },
+                    "office_status": { "type": "string" },
+                    "recipient_name": { "type": ["string", "null"] },
+                    "amount_to_collect": { "type": ["number", "null"] },
+                    "payment_code": { "type": ["string", "null"] },
+                    "scanned_at": { "type": "string", "format": "date-time" },
+                    "updated_at": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Guía no encontrada"
+          }
+        }
+      }
+    },
+    "/shipments/{trackingNumber}/jobs": {
+      "get": {
+        "summary": "Obtener jobs de una guía",
+        "description": "Lista todos los jobs asociados a una guía específica",
+        "operationId": "getShipmentJobs",
+        "tags": ["Shipments"],
+        "parameters": [
+          {
+            "name": "trackingNumber",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Número de rastreo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "type": { "type": "string", "enum": ["FETCH_PAYMENT_API", "FETCH_PORTAL_APX"] },
+                      "tracking_number": { "type": "string" },
+                      "status": { "type": "string" },
+                      "attempts": { "type": "integer" },
+                      "max_attempts": { "type": "integer" },
+                      "run_after": { "type": "string", "format": "date-time" },
+                      "last_error": { "type": ["string", "null"] },
+                      "created_at": { "type": "string", "format": "date-time" },
+                      "updated_at": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/export": {
+      "get": {
+        "summary": "Exportar guías a CSV",
+        "description": "Exporta guías en formato CSV con filtros opcionales por fecha, estado, zona y tipo de entrega",
+        "operationId": "exportShipments",
+        "tags": ["Shipments"],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "Fecha inicial (ISO format)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "Fecha final (ISO format)"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filtrar por estado de oficina"
+          },
+          {
+            "name": "zoneId",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Filtrar por zona"
+          },
+          {
+            "name": "deliveryType",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["LOCAL", "ZONA"] },
+            "description": "Filtrar por tipo de entrega"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archivo CSV",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/zones": {
+      "get": {
+        "summary": "Listar zonas",
+        "description": "Obtiene todas las zonas de entrega, con filtro opcional por estado activo",
+        "operationId": "getZones",
+        "tags": ["Zones"],
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "schema": { "type": "integer", "enum": [0, 1] },
+            "description": "Filtrar por estado activo (1) o inactivo (0)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de zonas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "count": { "type": "integer" },
+                    "zones": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "integer" },
+                          "name": { "type": "string" },
+                          "active": { "type": "integer", "enum": [0, 1] },
+                          "created_at": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear nueva zona",
+        "description": "Crea una nueva zona de entrega",
+        "operationId": "createZone",
+        "tags": ["Zones"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Nombre de la zona (máx 100 caracteres)",
+                    "example": "Zona Norte"
+                  }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Zona creada exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "zone": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "integer" },
+                        "name": { "type": "string" },
+                        "active": { "type": "integer" },
+                        "created_at": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación fallida"
+          },
+          "409": {
+            "description": "Zona con ese nombre ya existe"
+          }
+        }
+      }
+    },
+    "/zones/{id}": {
+      "get": {
+        "summary": "Obtener zona específica",
+        "description": "Obtiene los detalles de una zona por ID",
+        "operationId": "getZoneById",
+        "tags": ["Zones"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "ID de la zona"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalles de la zona",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "zone": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "integer" },
+                        "name": { "type": "string" },
+                        "active": { "type": "integer" },
+                        "created_at": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ID inválido"
+          },
+          "404": {
+            "description": "Zona no encontrada"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Actualizar zona",
+        "description": "Actualiza el nombre o estado de una zona",
+        "operationId": "updateZone",
+        "tags": ["Zones"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "ID de la zona"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Nuevo nombre (opcional)"
+                  },
+                  "active": {
+                    "type": "integer",
+                    "enum": [0, 1],
+                    "description": "Estado activo (opcional)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Zona actualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "zone": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación fallida"
+          },
+          "404": {
+            "description": "Zona no encontrada"
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "summary": "Listar jobs",
+        "description": "Obtiene jobs con filtros opcionales por estado, tipo y búsqueda de tracking",
+        "operationId": "getJobs",
+        "tags": ["Jobs"],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filtrar por estado (PENDING, DONE, WAITING_NET, NEEDS_HUMAN, FAILED)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["FETCH_PAYMENT_API", "FETCH_PORTAL_APX"] },
+            "description": "Filtrar por tipo de job"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Buscar por número de rastreo (búsqueda parcial)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 100, "maximum": 1000 },
+            "description": "Límite de resultados"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0 },
+            "description": "Offset para paginación"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de jobs con paginación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "limit": { "type": "integer" },
+                        "offset": { "type": "integer" },
+                        "count": { "type": "integer" }
+                      }
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "integer" },
+                          "type": { "type": "string" },
+                          "tracking_number": { "type": "string" },
+                          "status": { "type": "string" },
+                          "attempts": { "type": "integer" },
+                          "max_attempts": { "type": "integer" },
+                          "run_after": { "type": "string", "format": "date-time" },
+                          "last_error": { "type": ["string", "null"] },
+                          "created_at": { "type": "string", "format": "date-time" },
+                          "updated_at": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/summary": {
+      "get": {
+        "summary": "Resumen de jobs",
+        "description": "Obtiene un resumen de jobs agrupados por estado y tipo",
+        "operationId": "getJobsSummary",
+        "tags": ["Jobs"],
+        "responses": {
+          "200": {
+            "description": "Resumen de jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "summary": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "status": { "type": "string" },
+                          "type": { "type": "string" },
+                          "count": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["error"]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "Endpoints del sistema"
+    },
+    {
+      "name": "Scan",
+      "description": "Operaciones de escaneo de guías"
+    },
+    {
+      "name": "Shipments",
+      "description": "Gestión de guías y envíos"
+    },
+    {
+      "name": "Zones",
+      "description": "Gestión de zonas de entrega"
+    },
+    {
+      "name": "Jobs",
+      "description": "Gestión y monitoreo de jobs de sincronización"
+    }
+  ]
+}

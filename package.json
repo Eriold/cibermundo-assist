@@ -1,0 +1,24 @@
+{
+  "name": "cibermundo-assist",
+  "version": "1.0.0",
+  "description": "Monorepo para sistema de escaneo offline-first de Interrapidísimo",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:backend\" \"npm run start:worker\" \"npm run start:frontend\"",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:worker\" \"npm run dev:frontend\"",
+    "start:backend": "npm start --prefix backend",
+    "start:worker": "npm start --prefix worker",
+    "start:frontend": "npm run preview --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:worker": "npm run dev --prefix worker",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix worker && npm install --prefix frontend",
+    "build:all": "npm run build --prefix backend && npm run build --prefix worker && npm run build --prefix frontend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
