@@ -107,10 +107,18 @@ const Scanner: React.FC = () => {
     <div className="bg-background-light dark:bg-background-dark font-display h-screen w-full overflow-hidden select-none relative pt-6 flex flex-col">
       {/* Top Status Bar & Zone Control */}
       <div className="relative z-20 flex flex-col gap-3 p-4 pt-6 shrink-0">
-        <div className="mt-2 bg-white dark:bg-[#181811] rounded-full p-2 pl-5 pr-2 shadow-sm flex items-center justify-between border border-gray-100 dark:border-white/10">
-          <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider font-bold text-orange-500 dark:text-gray-400">Zona Actual</span>
-            <h2 className="text-dark-text dark:text-white text-lg font-bold leading-none">{zoneScan}</h2>
+        <div className="mt-2 bg-white dark:bg-[#181811] rounded-full p-2 pl-3 pr-2 shadow-sm flex items-center justify-between border border-gray-100 dark:border-white/10">
+          <div className="flex items-center gap-3">
+             <button 
+                onClick={() => navigate('/dashboard')}
+                className="size-10 bg-primary/20 text-primary flex items-center justify-center rounded-full hover:bg-primary/40 transition-colors"
+             >
+                <span className="material-symbols-outlined">dashboard</span>
+             </button>
+             <div className="flex flex-col">
+               <span className="text-[10px] uppercase tracking-wider font-bold text-orange-500 dark:text-gray-400">Zona Actual</span>
+               <h2 className="text-dark-text dark:text-white text-lg font-bold leading-none">{zoneScan}</h2>
+             </div>
           </div>
           <button
             className="bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-dark-text dark:text-white px-4 py-2 rounded-full text-xs font-bold transition-colors"

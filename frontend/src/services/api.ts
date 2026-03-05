@@ -24,6 +24,14 @@ export const registerScan = async (payload: ScanPayload) => {
 };
 
 /**
+ * Obtener listado de guías (con soporte de filtros opcional backend)
+ */
+export const getShipments = async (params = {}) => {
+  const res = await api.get('/shipments', { params });
+  return res.data;
+};
+
+/**
  * Chequea la salud del API general
  */
 export const pingApi = async () => {
