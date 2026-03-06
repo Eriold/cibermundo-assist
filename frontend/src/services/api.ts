@@ -31,6 +31,16 @@ export const getShipments = async (params = {}) => {
   return res.data;
 };
 
+export const updateShipmentTracking = async (oldTracking: string, newTracking: string) => {
+  const res = await api.patch(`/shipments/${oldTracking}`, { newTrackingNumber: newTracking });
+  return res.data;
+};
+
+export const deleteShipment = async (trackingNumber: string) => {
+  const res = await api.delete(`/shipments/${trackingNumber}`);
+  return res.data;
+};
+
 /**
  * Chequea la salud del API general
  */

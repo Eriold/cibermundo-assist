@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { all, get } from "../db/index.js";
+import { all, get, run } from "../db/index.js";
 
 const router = Router();
 
@@ -39,7 +39,12 @@ function generateCSV(data: any[], headers: string[]): string {
 // Obtener todas las guías
 router.get("/", (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const rows = all("SELECT * FROM shipments ORDER BY scanned_at DESC");
+    const rows = all(`
+      SELECT s.*, z.name as zone_name 
+      FROM shipments s 
+      LEFT JOIN zones z ON s.zone_id = z.id 
+      ORDER BY s.scanned_at DESC
+    `);
     res.json(rows);
   } catch (e) {
     next(e);
@@ -154,6 +159,74 @@ router.get("/export", (req: Request, res: Response, next: NextFunction) => {
     res.setHeader("Content-Disposition", `attachment; filename="shipments-${timestamp}.csv"`);
 
     res.send(csv);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// PATCH /:trackingNumber - Actualizar número de guía
+router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { trackingNumber } = req.params;
+    const { newTrackingNumber } = req.body;
+
+    if (!newTrackingNumber || typeof newTrackingNumber !== "string") {
+      return res.status(400).json({ error: "newTrackingNumber is required and must be a string" });
+    }
+
+    const trimmedNew = newTrackingNumber.trim();
+
+    if (!/^\d{10,15}$/.test(trimmedNew)) {
+      return res.status(400).json({ error: "El nuevo número de guía debe contener solo de 10 a 15 números." });
+    }
+
+    // Verificar si el viejo existe
+    const existing = get("SELECT tracking_number FROM shipments WHERE tracking_number = :old", { ":old": trackingNumber });
+    if (!existing) {
+      return res.status(404).json({ error: "Guía original no encontrada" });
+    }
+
+    if (trackingNumber === trimmedNew) {
+      return res.json({ ok: true, message: "Sin cambios" });
+    }
+
+    // Verificar colisión con el nuevo
+    const duplicate = get("SELECT tracking_number FROM shipments WHERE tracking_number = :new", { ":new": trimmedNew });
+    if (duplicate) {
+       return res.status(409).json({ error: "Esta guía ya se encuentra registrada en el sistema. Debes eliminar o editar la guía duplicada original antes de ingresarla aquí." });
+    }
+
+    // Update shipments y jobs
+    run("UPDATE shipments SET tracking_number = :new WHERE tracking_number = :old", {
+      ":old": trackingNumber,
+      ":new": trimmedNew
+    });
+
+    run("UPDATE jobs SET tracking_number = :new WHERE tracking_number = :old", {
+      ":old": trackingNumber,
+      ":new": trimmedNew
+    });
+
+    res.json({ ok: true, message: "Guía actualizada correctamente" });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// DELETE /:trackingNumber - Eliminar guía (y sus jobs)
+router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { trackingNumber } = req.params;
+
+    const existing = get("SELECT tracking_number FROM shipments WHERE tracking_number = :t", { ":t": trackingNumber });
+    if (!existing) {
+      return res.status(404).json({ error: "Guía no encontrada" });
+    }
+
+    run("DELETE FROM shipments WHERE tracking_number = :t", { ":t": trackingNumber });
+    run("DELETE FROM jobs WHERE tracking_number = :t", { ":t": trackingNumber });
+
+    res.json({ ok: true, message: "Guía eliminada" });
   } catch (e) {
     next(e);
   }

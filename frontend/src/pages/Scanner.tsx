@@ -74,8 +74,10 @@ const Scanner: React.FC = () => {
     try {
       console.log("Procesando scan:", code);
       
+      const sessionUserName = user ? user.name : "Operario Anónimo";
+      
       // La lógica offline-first decide dónde guardarlo automáticamente
-      await processScan(code);
+      await processScan(code, sessionUserName);
 
       // UX Enhancement: Haptic & Visual Feedback
       if (navigator.vibrate) navigator.vibrate(200);
