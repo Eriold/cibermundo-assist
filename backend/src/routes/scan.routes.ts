@@ -37,8 +37,8 @@ function validateScanInput(body: ScanRequest) {
   // trackingNumber
   if (typeof body.trackingNumber !== "string") {
     errors.push("trackingNumber must be a string");
-  } else if (!/^\d{10,15}$/.test(body.trackingNumber)) {
-    errors.push("trackingNumber must be 10-15 digits only");
+  } else if (!/^\d{4,20}$/.test(body.trackingNumber)) {
+    errors.push("trackingNumber must be 4-20 digits only");
   }
 
   // deliveryType

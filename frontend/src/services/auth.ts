@@ -34,10 +34,21 @@ export const clearSession = () => {
 // Zonas
 const ZONE_KEY = 'cibermundo_active_zone';
 
-export const saveActiveZone = (zoneName: string) => {
-    localStorage.setItem(ZONE_KEY, zoneName);
+interface ActiveZone {
+    id: number;
+    name: string;
 }
 
-export const getActiveZone = (): string | null => {
-    return localStorage.getItem(ZONE_KEY);
+export const saveActiveZone = (zone: ActiveZone) => {
+    localStorage.setItem(ZONE_KEY, JSON.stringify(zone));
+}
+
+export const getActiveZone = (): ActiveZone | null => {
+    const data = localStorage.getItem(ZONE_KEY);
+    if (!data) return null;
+    try {
+        return JSON.parse(data);
+    } catch {
+        return null;
+    }
 }

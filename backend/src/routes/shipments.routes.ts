@@ -176,8 +176,8 @@ router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunctio
 
     const trimmedNew = newTrackingNumber.trim();
 
-    if (!/^\d{10,15}$/.test(trimmedNew)) {
-      return res.status(400).json({ error: "El nuevo número de guía debe contener solo de 10 a 15 números." });
+    if (!/^\d{4,20}$/.test(trimmedNew)) {
+      return res.status(400).json({ error: "El nuevo número de guía debe contener solo de 4 a 20 números." });
     }
 
     // Verificar si el viejo existe

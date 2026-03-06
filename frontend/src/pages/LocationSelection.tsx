@@ -41,8 +41,8 @@ const LocationSelection: React.FC = () => {
     fetchZones();
   }, [navigate]);
 
-  const handleZoneSelect = (zone: string) => {
-    saveActiveZone(zone);
+  const handleZoneSelect = (zone: Zone) => {
+    saveActiveZone({ id: zone.id, name: zone.name });
     navigate('/scanner');
   };
 
@@ -113,7 +113,7 @@ const LocationSelection: React.FC = () => {
                 zones.map(zone => (
                     <button 
                         key={zone.id}
-                        onClick={() => handleZoneSelect(zone.name)}
+                        onClick={() => handleZoneSelect(zone)}
                         className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
                     >
                         <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">

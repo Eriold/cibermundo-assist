@@ -16,13 +16,17 @@ const Scanner: React.FC = () => {
   
   const [user, setUser] = useState<UserSession | null>(null);
   const [zoneScan, setZoneScan] = useState<string>('Sin Zona');
+  const [zoneId, setZoneId] = useState<number | null>(null);
 
   useEffect(() => {
     const sessionUser = getSession();
     if (sessionUser) setUser(sessionUser);
     
     const activeZ = getActiveZone();
-    if (activeZ) setZoneScan(activeZ);
+    if (activeZ) {
+       setZoneScan(activeZ.name);
+       setZoneId(activeZ.id);
+    }
   }, []);
 
   // Sincronizador Backend local vs Dexie offline
@@ -77,7 +81,7 @@ const Scanner: React.FC = () => {
       const sessionUserName = user ? user.name : "Operario Anónimo";
       
       // La lógica offline-first decide dónde guardarlo automáticamente
-      await processScan(code, sessionUserName);
+      await processScan(code, sessionUserName, zoneId);
 
       // UX Enhancement: Haptic & Visual Feedback
       if (navigator.vibrate) navigator.vibrate(200);
@@ -91,8 +95,9 @@ const Scanner: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Error al procesar scan local", err);
-      // Solo fallará si explota Dexie (poco común)
-      setErrorMsg("Error interno. No se pudo guardar la guía localmente.");
+      // Validar si el backend devolvió un 400 Bad Request y extraer su detalle de validación
+      const validationError = err.response?.data?.details?.join(', ') || err.response?.data?.error;
+      setErrorMsg(validationError || "Error interno. No se pudo guardar la guía.");
       setShowBanner(true);
     } finally {
       setIsSubmitting(false);

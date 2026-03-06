@@ -9,6 +9,7 @@ export interface OfflineScan {
   status: 'PENDING' | 'SYNCED' | 'ERROR';
   sync_attempts: number;
   error_message?: string;
+  zone_id?: number | null;
 }
 
 export class CibermundoDB extends Dexie {

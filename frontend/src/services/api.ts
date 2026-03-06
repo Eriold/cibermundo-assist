@@ -13,6 +13,7 @@ export interface ScanPayload {
   trackingNumber: string;
   scannedBy: string; // "Melissa" por ahora
   deliveryType: string; // "LOCAL" o "ZONA"
+  zoneId?: number | null;
 }
 
 /**
