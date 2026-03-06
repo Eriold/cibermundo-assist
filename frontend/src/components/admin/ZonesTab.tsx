@@ -159,7 +159,7 @@ const ZonesTab: React.FC = () => {
                         <tr key={z.id} className={`transition-colors ${z.active === 1 ? 'hover:bg-gray-50/50 dark:hover:bg-black/20' : 'bg-gray-50 dark:bg-black/40 opacity-70'}`}>
                             <td className="p-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="size-10 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0">
+                                    <div className="size-10 rounded-full bg-primary-light/20 text-primary flex items-center justify-center shrink-0">
                                         <span className="material-symbols-outlined text-[20px]">map</span>
                                     </div>
                                     <div>

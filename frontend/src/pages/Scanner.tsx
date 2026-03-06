@@ -124,7 +124,7 @@ const Scanner: React.FC = () => {
              {user?.roles?.isAdmin && (
                  <button 
                     onClick={() => navigate('/home')}
-                    className="size-10 bg-primary/20 text-primary flex items-center justify-center rounded-full hover:bg-primary/40 transition-colors"
+                    className="size-10 bg-primary-light/20 text-primary flex items-center justify-center rounded-full hover:bg-primary/40 transition-colors"
                  >
                     <span className="material-symbols-outlined">home</span>
                  </button>
@@ -161,7 +161,7 @@ const Scanner: React.FC = () => {
         )}
 
         <div className="w-full bg-white dark:bg-[#2c2b1f] p-8 rounded-3xl shadow-lg border border-gray-100 dark:border-white/5 flex flex-col items-center gap-6">
-          <div className="size-20 bg-primary/20 text-primary rounded-full flex items-center justify-center mb-2">
+          <div className="size-20 bg-primary-light/20 text-primary rounded-full flex items-center justify-center mb-2">
             <span className="material-symbols-outlined text-[40px]">barcode_scanner</span>
           </div>
           

@@ -21,7 +21,7 @@ const Home: React.FC = () => {
       {/* App Bar */}
       <header className="px-6 py-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-primary/20 text-primary p-2.5 rounded-2xl shadow-sm">
+          <div className="bg-primary-light/20 text-primary p-2.5 rounded-2xl shadow-sm">
             <span className="material-symbols-outlined text-[24px]">box</span>
           </div>
           <div>
@@ -63,7 +63,7 @@ const Home: React.FC = () => {
                     onClick={() => navigate('/location')}
                     className="group relative flex flex-col gap-3 bg-white dark:bg-surface-dark p-6 rounded-[2rem] shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left overflow-hidden overflow-hidden"
                 >
-                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/20 transition-colors"></div>
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-primary-light/5 rounded-full blur-2xl group-hover:bg-primary-light/20 transition-colors"></div>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center justify-center size-14 rounded-2xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-black transition-colors">
                             <span className="material-symbols-outlined text-[28px]">qr_code_scanner</span>

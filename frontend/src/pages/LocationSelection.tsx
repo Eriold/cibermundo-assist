@@ -74,7 +74,7 @@ const LocationSelection: React.FC = () => {
                 <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Operario</span>
                 <span className="text-sm font-bold truncate max-w-[120px]">{user?.name || '...'}</span>
             </div>
-            <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors bg-primary/20 text-primary">
+            <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors bg-primary-light/20 text-primary">
                 <span className="material-symbols-outlined">person</span>
             </button>
         </div>
@@ -122,7 +122,7 @@ const LocationSelection: React.FC = () => {
                         <div className="flex flex-col flex-1 min-w-0">
                             <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">{zone.name}</span>
                         </div>
-                        <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+                        <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary-light/20">
                             <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
                         </div>
                     </button>

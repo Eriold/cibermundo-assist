@@ -168,7 +168,7 @@ const UsersTab: React.FC = () => {
                         <tr key={u.id} className="hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors">
                             <td className="p-4">
                                 <div className="flex items-center gap-3">
-                                    <div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${u.roles.isAdmin ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400' : 'bg-primary/20 text-primary'}`}>
+                                    <div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${u.roles.isAdmin ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400' : 'bg-primary-light/20 text-primary'}`}>
                                         <span className="material-symbols-outlined text-[20px]">{u.roles.isAdmin ? 'shield_person' : 'badge'}</span>
                                     </div>
                                     <div>
