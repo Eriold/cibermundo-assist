@@ -1,4 +1,4 @@
-import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
+import Database, { Database as SQLiteDatabase } from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,117 +11,69 @@ const dbPath = path.resolve(
   process.env.DB_PATH || "../../data/app.db"
 );
 
-let dbInstance: SqlJsDatabase | null = null;
-let saveTimeout: NodeJS.Timeout | null = null;
+let dbInstance: SQLiteDatabase | null = null;
 
 export function getDbPath(): string {
   return dbPath;
 }
 
 export async function initDb() {
-  const SQL = await initSqlJs();
-  
-  // Cargar DB existente o crear nueva
-  if (fs.existsSync(dbPath)) {
-    const data = fs.readFileSync(dbPath);
-    dbInstance = new SQL.Database(data);
-  } else {
-    dbInstance = new SQL.Database();
-  }
-  
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  dbInstance = new Database(dbPath);
+  dbInstance.pragma("journal_mode = WAL");
+  dbInstance.pragma("synchronous = NORMAL");
   return dbInstance;
 }
 
-export function getDb(): SqlJsDatabase {
+export function getDb(): SQLiteDatabase {
   if (!dbInstance) {
     throw new Error("Database not initialized. Call initDb() first.");
   }
   return dbInstance;
 }
 
-export function saveDb() {
-  if (!dbInstance) return;
-  
-  // Debounce: evitar guardar múltiples veces en corto tiempo
-  if (saveTimeout) clearTimeout(saveTimeout);
-  
-  saveTimeout = setTimeout(() => {
-    // Crear carpeta si no existe
-    const dir = path.dirname(dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    
-    const data = dbInstance!.export();
-    fs.writeFileSync(dbPath, Buffer.from(data));
-  }, 500); // Esperar 500ms después del último cambio
+export function saveDb() { /* no op for better-sqlite3 */ }
+export function saveDbImmediate() { /* no op for better-sqlite3 */ }
+
+function bindParams(stmt: any, params: Record<string, any> = {}) {
+  // Strip prefixes for named parameters internally if object provided
+  // better-sqlite3 handles '?' parameters via varargs
+  if (Array.isArray(params)) {
+    return params;
+  }
+  const sanitized: Record<string, any> = {};
+  for (const [k, v] of Object.entries(params)) {
+    const key = k.startsWith(":") || k.startsWith("@") || k.startsWith("$") ? k.substring(1) : k;
+    sanitized[key] = v;
+  }
+  return sanitized;
 }
 
-/**
- * Fuerza una save inmediata (sin debounce)
- * Util para operaciones criticas donde necesitas garantizar persistencia
- */
-export function saveDbImmediate() {
-  if (!dbInstance) return;
-
-  // Cancelar debounce pendiente
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-    saveTimeout = null;
-  }
-
-  // Guardar inmediatamente
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  const data = dbInstance!.export();
-  fs.writeFileSync(dbPath, Buffer.from(data));
-}
-
-// Helpers - sincronos, guardan inmediatamente
-export function run(sql: string, params: Record<string, any> = {}) {
+export function run(sql: string, params: any = {}) {
   const db = getDb();
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  stmt.step();
-  stmt.free();
-  saveDbImmediate();
+  const p = bindParams(stmt, params);
+  if (Array.isArray(p)) stmt.run(...p); else stmt.run(p);
 }
 
-export function get<T = any>(sql: string, params: Record<string, any> = {}): T | undefined {
+export function get<T = any>(sql: string, params: any = {}): T | undefined {
   const db = getDb();
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  
-  if (!stmt.step()) {
-    stmt.free();
-    return undefined;
-  }
-  
-  const row = stmt.getAsObject();
-  stmt.free();
-  
-  return row as T;
+  const p = bindParams(stmt, params);
+  const res = Array.isArray(p) ? stmt.get(...p) : stmt.get(p);
+  return res as T | undefined;
 }
 
-export function all<T = any>(sql: string, params: Record<string, any> = {}): T[] {
+export function all<T = any>(sql: string, params: any = {}): T[] {
   const db = getDb();
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  
-  const results: T[] = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject() as T);
-  }
-  stmt.free();
-  
-  return results;
+  const p = bindParams(stmt, params);
+  return (Array.isArray(p) ? stmt.all(...p) : stmt.all(p)) as T[];
 }
 
-// Para queries de lectura sin modificar
-export function exec(sql: string): any[] {
+export function exec(sql: string): void {
   const db = getDb();
-  return db.exec(sql);
+  db.exec(sql);
 }

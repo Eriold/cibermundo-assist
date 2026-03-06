@@ -9,7 +9,7 @@ router.post("/archive", (req: Request, res: Response, next: NextFunction) => {
   try {
     const db = getDb();
     
-    // Iniciar transacción (SQLite WebAssembly approach usando exec)
+    // Iniciar transacción
     db.exec("BEGIN TRANSACTION;");
 
     try {
@@ -31,15 +31,12 @@ router.post("/archive", (req: Request, res: Response, next: NextFunction) => {
         FROM shipments
         WHERE scanned_at <= datetime('now', '-30 days')
       `;
-      db.exec(archiveSql);
-
-      // 2. Obtener cuántas filas afectamos (aunque es un aproximado por limitacion de sql.js, podemos ver con SELECT)
-      const resCount = db.exec("SELECT changes() as affected;");
-      const affectedRows = resCount[0].values[0][0];
+      const result = db.prepare(archiveSql).run();
+      const affectedRows = result.changes;
 
       // 3. Eliminar los originales
-      if (affectedRows && (affectedRows as number) > 0) {
-        db.exec("DELETE FROM shipments WHERE scanned_at <= datetime('now', '-30 days')");
+      if (affectedRows > 0) {
+        db.prepare("DELETE FROM shipments WHERE scanned_at <= datetime('now', '-30 days')").run();
       }
 
       // Commit

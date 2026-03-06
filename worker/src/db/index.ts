@@ -1,4 +1,4 @@
-import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
+import Database, { Database as SQLiteDatabase } from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,23 +11,23 @@ const dbPath = path.resolve(
   process.env.DB_PATH || "../../../backend/data/app.db"
 );
 
-let dbInstance: SqlJsDatabase | null = null;
-let saveTimeout: NodeJS.Timeout | null = null;
+let dbInstance: SQLiteDatabase | null = null;
 
 export function getDbPath(): string {
   return dbPath;
 }
 
 export async function initDb() {
-  const SQL = await initSqlJs();
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const exists = fs.existsSync(dbPath);
+  dbInstance = new Database(dbPath);
+  dbInstance.pragma("journal_mode = WAL");
+  dbInstance.pragma("synchronous = NORMAL");
   
-  if (fs.existsSync(dbPath)) {
-    const data = fs.readFileSync(dbPath);
-    dbInstance = new SQL.Database(data);
-  } else {
-    // Si la db no existe (backend no ha iniciado), creamos una nueva vacia y FORZAMOS SU ESTRUCTURA
-    dbInstance = new SQL.Database();
-    initSchema(); // Asegura crear tablas (soluciona la condicion de carrera "no such table")
+  if (!exists) {
+    initSchema();
   }
   
   return dbInstance;
@@ -135,76 +135,48 @@ export function initSchema() {
   `);
 }
 
-export function getDb(): SqlJsDatabase {
+export function getDb(): SQLiteDatabase {
   if (!dbInstance) {
     throw new Error("Database not initialized. Call initDb() first.");
   }
   return dbInstance;
 }
 
-export function saveDb() {
-  if (!dbInstance) return;
-  if (saveTimeout) clearTimeout(saveTimeout);
-  
-  saveTimeout = setTimeout(() => {
-    const dir = path.dirname(dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const data = dbInstance!.export();
-    fs.writeFileSync(dbPath, Buffer.from(data));
-  }, 500);
+export function saveDb() { /* no op for better-sqlite3 */ }
+export function saveDbImmediate() { /* no op for better-sqlite3 */ }
+
+function bindParams(stmt: any, params: Record<string, any> = {}) {
+  // Strip prefixes for named parameters internally if object provided
+  // better-sqlite3 handles '?' parameters via varargs
+  if (Array.isArray(params)) {
+    return params;
+  }
+  const sanitized: Record<string, any> = {};
+  for (const [k, v] of Object.entries(params)) {
+    const key = k.startsWith(":") || k.startsWith("@") || k.startsWith("$") ? k.substring(1) : k;
+    sanitized[key] = v;
+  }
+  return sanitized;
 }
 
-export function saveDbImmediate() {
-  if (!dbInstance) return;
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-    saveTimeout = null;
-  }
-
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  const data = dbInstance!.export();
-  fs.writeFileSync(dbPath, Buffer.from(data));
-}
-
-export function run(sql: string, params: Record<string, any> = {}) {
+export function run(sql: string, params: any = {}) {
   const db = getDb();
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  stmt.step();
-  stmt.free();
-  saveDbImmediate();
+  const p = bindParams(stmt, params);
+  if (Array.isArray(p)) stmt.run(...p); else stmt.run(p);
 }
 
-export function get<T = any>(sql: string, params: Record<string, any> = {}): T | undefined {
+export function get<T = any>(sql: string, params: any = {}): T | undefined {
   const db = getDb();
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  
-  if (!stmt.step()) {
-    stmt.free();
-    return undefined;
-  }
-  
-  const row = stmt.getAsObject();
-  stmt.free();
-  return row as T;
+  const p = bindParams(stmt, params);
+  const res = Array.isArray(p) ? stmt.get(...p) : stmt.get(p);
+  return res as T | undefined;
 }
 
-export function all<T = any>(sql: string, params: Record<string, any> = {}): T[] {
+export function all<T = any>(sql: string, params: any = {}): T[] {
   const db = getDb();
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  
-  const results: T[] = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject() as T);
-  }
-  stmt.free();
-  return results;
+  const p = bindParams(stmt, params);
+  return (Array.isArray(p) ? stmt.all(...p) : stmt.all(p)) as T[];
 }
