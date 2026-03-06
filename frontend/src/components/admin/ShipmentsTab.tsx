@@ -17,6 +17,7 @@ const ShipmentsTab: React.FC = () => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Modals state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -29,17 +30,17 @@ const ShipmentsTab: React.FC = () => {
   const [shipmentToDelete, setShipmentToDelete] = useState<Shipment | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchShipments = async () => {
-    setLoading(true);
-    setErrorMsg('');
+  const fetchShipments = async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setErrorMsg('');
     try {
       const data = await getShipments();
       setShipments(data);
     } catch (error: any) {
       console.error("Error al cargar guías", error);
-      setErrorMsg("Error cargando guías. Servidor no accesible.");
+      if (!silent) setErrorMsg("Error cargando guías. Servidor no accesible.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -57,7 +58,7 @@ const ShipmentsTab: React.FC = () => {
     try {
       await updateShipmentTracking(editingShipment.tracking_number, newTracking);
       setShowEditModal(false);
-      fetchShipments();
+      fetchShipments(false);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.error || 'Error al actualizar');
     } finally {
@@ -71,7 +72,7 @@ const ShipmentsTab: React.FC = () => {
     try {
       await deleteShipment(shipmentToDelete.tracking_number);
       setShowDeleteModal(false);
-      fetchShipments();
+      fetchShipments(false);
     } catch (err: any) {
       alert(err.response?.data?.error || "Error al eliminar");
     } finally {
@@ -80,8 +81,21 @@ const ShipmentsTab: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchShipments();
+    fetchShipments(false);
   }, []);
+
+  // Poll interval effect
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        fetchShipments(true);
+      }, 10000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh]);
 
   const formatDate = (isoString: string) => {
     if (!isoString) return '-';
@@ -96,14 +110,28 @@ const ShipmentsTab: React.FC = () => {
         {/* Actions Bar */}
         <div className="flex justify-between items-center mb-4 shrink-0">
             <h2 className="text-xl font-bold text-dark-text dark:text-white">Últimas Guías</h2>
-            <button 
-                onClick={fetchShipments}
-                disabled={loading}
-                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95 disabled:opacity-50"
-            >
-                <span className="material-symbols-outlined text-[18px]">{loading ? 'sync' : 'refresh'}</span>
-                Actualizar
-            </button>
+            <div className="flex items-center gap-4">
+                <label className="hidden sm:flex items-center gap-2 cursor-pointer select-none">
+                    <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-1">Auto Update (10s)</span>
+                    <div className="relative">
+                        <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={autoRefresh}
+                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                    </div>
+                </label>
+                <button 
+                    onClick={() => fetchShipments(false)}
+                    disabled={loading}
+                    className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95 disabled:opacity-50"
+                >
+                    <span className={`material-symbols-outlined text-[18px] ${loading && !autoRefresh ? 'animate-spin' : ''}`}>sync</span>
+                    Actualizar
+                </button>
+            </div>
         </div>
 
         {errorMsg && (
