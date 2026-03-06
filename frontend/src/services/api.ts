@@ -63,8 +63,13 @@ export const createZone = async (name: string) => {
   return res.data;
 };
 
-export const updateZoneStatus = async (id: number, active: boolean) => {
-  const res = await api.patch(`/zones/${id}`, { active });
+export const updateZone = async (id: number, data: { name?: string, active?: boolean }) => {
+  const res = await api.patch(`/zones/${id}`, data);
+  return res.data;
+};
+
+export const deleteZone = async (id: number) => {
+  const res = await api.delete(`/zones/${id}`);
   return res.data;
 };
 

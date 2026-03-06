@@ -211,4 +211,25 @@ router.patch("/:id", (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+// DELETE /zones/:id - Eliminar zona
+router.delete("/:id", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID format" });
+
+    const existing = get<Zone>("SELECT id, name FROM zones WHERE id = :id", { ":id": id });
+    if (!existing) {
+      return res.status(404).json({ error: "Zone not found" });
+    }
+
+    // Aquí podríamos validar si hay guías atadas a la zona, 
+    // pero como el modelo es libre, procederemos a borrar.
+    run("DELETE FROM zones WHERE id = :id", { ":id": id });
+
+    res.json({ ok: true, message: "Zone deleted" });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;
