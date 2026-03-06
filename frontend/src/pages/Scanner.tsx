@@ -23,11 +23,14 @@ const Scanner: React.FC = () => {
     if (sessionUser) setUser(sessionUser);
     
     const activeZ = getActiveZone();
-    if (activeZ) {
-       setZoneScan(activeZ.name);
-       setZoneId(activeZ.id);
+    if (!activeZ || !activeZ.id) {
+       navigate('/location');
+       return;
     }
-  }, []);
+    
+    setZoneScan(activeZ.name);
+    setZoneId(activeZ.id);
+  }, [navigate]);
 
   // Sincronizador Backend local vs Dexie offline
   const { isOnline, isSyncing, pendingCount, processScan, syncPending } = useSync();
