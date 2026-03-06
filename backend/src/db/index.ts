@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const dbPath = path.resolve(
   __dirname,
-  process.env.DB_PATH || "../../../../data/app.db"
+  process.env.DB_PATH || "../../data/app.db"
 );
 
 let dbInstance: SqlJsDatabase | null = null;
