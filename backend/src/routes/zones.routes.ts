@@ -22,7 +22,7 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
     if (active !== undefined) {
       const activeValue = String(active) === "1" ? 1 : 0;
       sql += " WHERE active = :active";
-      params.active = activeValue;
+      params[":active"] = activeValue;
     }
 
     sql += " ORDER BY name ASC";
@@ -51,7 +51,7 @@ router.get("/:id", (req: Request, res: Response, next: NextFunction) => {
     }
 
     const zone = get<Zone>("SELECT id, name, active, created_at FROM zones WHERE id = :id", {
-      id: zoneId,
+      ":id": zoneId,
     });
 
     if (!zone) {
@@ -88,7 +88,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
     const now = new Date().toISOString();
 
     // Verificar si ya existe
-    const existing = get("SELECT id FROM zones WHERE name = :name", { name: trimmedName });
+    const existing = get("SELECT id FROM zones WHERE name = :name", { ":name": trimmedName });
     if (existing) {
       return res.status(409).json({ error: "Zone with this name already exists" });
     }
@@ -99,12 +99,12 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
       INSERT INTO zones (name, active, created_at)
       VALUES (:name, 1, :now)
       `,
-      { name: trimmedName, now }
+      { ":name": trimmedName, ":now": now }
     );
 
     // Obtener el que se creó (aproximado, buscamos por name)
     const newZone = get<Zone>("SELECT id, name, active, created_at FROM zones WHERE name = :name", {
-      name: trimmedName,
+      ":name": trimmedName,
     });
 
     res.status(201).json({
@@ -162,7 +162,7 @@ router.patch("/:id", (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Verificar que existe
-    const existing = get<Zone>("SELECT id, name FROM zones WHERE id = :id", { id: zoneId });
+    const existing = get<Zone>("SELECT id, name FROM zones WHERE id = :id", { ":id": zoneId });
     if (!existing) {
       return res.status(404).json({ error: "Zone not found" });
     }
@@ -170,8 +170,8 @@ router.patch("/:id", (req: Request, res: Response, next: NextFunction) => {
     // Si se actualiza name, verificar que no esté duplicado
     if (updates.name && updates.name !== existing.name) {
       const duplicate = get("SELECT id FROM zones WHERE name = :name AND id != :id", {
-        name: updates.name,
-        id: zoneId,
+        ":name": updates.name,
+        ":id": zoneId,
       });
       if (duplicate) {
         return res.status(409).json({ error: "Zone with this name already exists" });
@@ -180,16 +180,16 @@ router.patch("/:id", (req: Request, res: Response, next: NextFunction) => {
 
     // Construir UPDATE dinámico
     const updateFields: string[] = [];
-    const params: Record<string, any> = { id: zoneId };
+    const params: Record<string, any> = { ":id": zoneId };
 
     if (updates.name) {
       updateFields.push("name = :name");
-      params.name = updates.name;
+      params[":name"] = updates.name;
     }
 
     if (updates.active !== undefined) {
       updateFields.push("active = :active");
-      params.active = updates.active;
+      params[":active"] = updates.active;
     }
 
     if (updateFields.length > 0) {
@@ -198,7 +198,7 @@ router.patch("/:id", (req: Request, res: Response, next: NextFunction) => {
 
     // Obtener zona actualizada
     const updated = get<Zone>("SELECT id, name, active, created_at FROM zones WHERE id = :id", {
-      id: zoneId,
+      ":id": zoneId,
     });
 
     res.json({
