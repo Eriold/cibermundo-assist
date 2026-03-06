@@ -1,13 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getZones } from '../services/api';
+import { getSession, saveActiveZone } from '../services/auth';
+import type { UserSession } from '../services/auth';
+
+interface Zone {
+  id: number;
+  name: string;
+}
 
 const LocationSelection: React.FC = () => {
   const navigate = useNavigate();
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [user, setUser] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    const session = getSession();
+    if (!session) {
+      navigate('/');
+      return;
+    }
+    setUser(session);
+
+    const fetchZones = async () => {
+      try {
+        const resp = await getZones();
+        if (resp.ok && resp.zones) {
+          setZones(resp.zones);
+        }
+      } catch (err: any) {
+        console.error("Error fetching zones", err);
+        setErrorMsg('No se pudieron cargar las zonas. Verifique su conexión al servidor local.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchZones();
+  }, [navigate]);
 
   const handleZoneSelect = (zone: string) => {
-    console.log(`Selected zone: ${zone}`);
+    saveActiveZone(zone);
     navigate('/scanner');
   };
+
+  const getIconForZone = (name: string) => {
+      const lower = name.toLowerCase();
+      if (lower.includes('local') || lower.includes('tienda')) return 'storefront';
+      if (lower.includes('almacén') || lower.includes('almacen')) return 'inventory_2';
+      if (lower.includes('recep')) return 'shelves';
+      if (lower.includes('logística') || lower.includes('extern')) return 'forklift';
+      return 'place';
+  }
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-[#181811] dark:text-white min-h-screen flex flex-col transition-colors duration-200 font-display">
@@ -19,13 +65,16 @@ const LocationSelection: React.FC = () => {
           </div>
           <h2 className="text-lg font-bold tracking-tight">Scanner Pro</h2>
         </div>
-        <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
-          <img 
-            alt="Operator profile picture" 
-            className="size-8 rounded-full object-cover border border-gray-200 dark:border-white/10" 
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPY4z8keHFBBYWKQUR1WOGresZIIjMxiZk8iddQXscce2oNcyGnGJLn3ElxB5gOGE_vQEIaBq-EEt0ZtbQyZRZcz_TydNJNYXggO5qAOUfYPs-UZVERvG_T7PgSFqAf_-WMMgdWjcFdHTsHDurw3O1y1he7IsxSMaovOUVfn0wRuT4js9JjsFG9Pep4IP9tcwefeFyTqMrODXaaoJLyze4F3v3aahqL82fBmVDlfgMZXBCYJvBLa2UF2dQ8HJ3qf5WbVTeS8xtCDk"
-          />
-        </button>
+        
+        <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end hidden sm:flex pr-2">
+                <span className="text-xs text-gray-500 font-bold uppercase mapping-wider">Operario</span>
+                <span className="text-sm font-bold truncate max-w-[120px]">{user?.name || '...'}</span>
+            </div>
+            <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors bg-primary/20 text-primary">
+                <span className="material-symbols-outlined">person</span>
+            </button>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -38,93 +87,46 @@ const LocationSelection: React.FC = () => {
           </p>
         </div>
 
+        {/* Status / Errors */}
+        {isLoading && (
+             <div className="flex justify-center items-center py-10">
+                 <span className="material-symbols-outlined animate-spin text-primary text-4xl">refresh</span>
+             </div>
+        )}
+
+        {errorMsg && !isLoading && (
+             <div className="bg-red-500/10 text-red-500 border border-red-500/20 px-4 py-4 rounded-xl text-sm font-bold flex items-center gap-3">
+                 <span className="material-symbols-outlined">wifi_off</span>
+                 {errorMsg}
+             </div>
+        )}
+
         {/* Zone Selection List */}
-        <div className="flex flex-col gap-4 w-full">
-          {/* Card 1: Local */}
-          <button 
-            onClick={() => handleZoneSelect('Local')}
-            className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-primary text-black">
-              <span className="material-symbols-outlined text-[28px]">storefront</span>
+        {!isLoading && !errorMsg && (
+            <div className="flex flex-col gap-4 w-full">
+            {zones.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">No hay zonas activas configuradas. Solicite soporte al Administrador.</div>
+            ) : (
+                zones.map(zone => (
+                    <button 
+                        key={zone.id}
+                        onClick={() => handleZoneSelect(zone.name)}
+                        className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
+                    >
+                        <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
+                            <span className="material-symbols-outlined text-[28px]">{getIconForZone(zone.name)}</span>
+                        </div>
+                        <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">{zone.name}</span>
+                        </div>
+                        <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
+                            <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
+                        </div>
+                    </button>
+                ))
+            )}
             </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Local</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 truncate">Tienda Principal</span>
-            </div>
-            <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
-              <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
-            </div>
-          </button>
-
-          {/* Card 2: Zona A */}
-          <button 
-            onClick={() => handleZoneSelect('Zona A')}
-            className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
-              <span className="material-symbols-outlined text-[28px]">inventory_2</span>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona A</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 truncate">Almacén General</span>
-            </div>
-            <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
-              <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
-            </div>
-          </button>
-
-          {/* Card 3: Zona B */}
-          <button 
-            onClick={() => handleZoneSelect('Zona B')}
-            className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
-              <span className="material-symbols-outlined text-[28px]">shelves</span>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona B</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 truncate">Recepción de Carga</span>
-            </div>
-            <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
-              <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
-            </div>
-          </button>
-
-          {/* Card 4: Zona C */}
-          <button 
-            onClick={() => handleZoneSelect('Zona C')}
-            className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
-              <span className="material-symbols-outlined text-[28px]">conveyor_belt</span>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona C</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 truncate">Procesamiento</span>
-            </div>
-            <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
-              <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
-            </div>
-          </button>
-
-          {/* Card 5: Zona D */}
-          <button 
-            onClick={() => handleZoneSelect('Zona D')}
-            className="group w-full relative flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-2 pr-6 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-center shrink-0 size-16 rounded-full bg-surface-light dark:bg-white/5 border-2 border-primary/20 dark:border-primary/10 text-[#181811] dark:text-white group-hover:border-primary transition-colors">
-              <span className="material-symbols-outlined text-[28px]">forklift</span>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-lg font-bold text-[#181811] dark:text-white group-hover:text-primary-dark dark:group-hover:text-primary transition-colors truncate">Zona D</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 truncate">Logística Externa</span>
-            </div>
-            <div className="shrink-0 flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-white/5 group-hover:bg-primary/20">
-              <span className="material-symbols-outlined text-gray-400 group-hover:text-black dark:text-gray-500">chevron_right</span>
-            </div>
-          </button>
-        </div>
+        )}
       </main>
 
       {/* Footer Status */}

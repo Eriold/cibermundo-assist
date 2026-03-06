@@ -10,6 +10,7 @@ import zonesRoutes from "./routes/zones.routes.js";
 import jobsRoutes from "./routes/jobs.routes.js";
 import testRoutes from "./routes/test.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import usersRoutes from "./routes/users.routes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,7 @@ export function createApp() {
   app.use("/jobs", jobsRoutes);
   app.use("/test", testRoutes);
   app.use("/admin", adminRoutes);
+  app.use("/users", usersRoutes);
 
   return app;
 }

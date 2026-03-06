@@ -1,13 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { login } from '../services/api';
+import { saveSession } from '../services/auth';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    // Simulate login logic
-    navigate('/location');
+    setErrorMsg('');
+
+    if (!username.trim() || !pin.trim()) {
+      setErrorMsg('Usuario y contraseña (PIN) son requeridos');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const resp = await login(username, pin);
+      if (resp.ok && resp.user) {
+        saveSession(resp.user);
+        navigate('/location');
+      }
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        setErrorMsg('Credenciales inválidas');
+      } else {
+        setErrorMsg('Error conectando al servidor');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -25,6 +53,14 @@ const Login: React.FC = () => {
         {/* Main Form Content */}
         <main className="flex-1 flex flex-col px-6">
           <form className="space-y-6" onSubmit={handleSubmit}>
+            
+            {errorMsg && (
+                <div className="bg-red-500/10 text-red-500 border border-red-500/20 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined">error</span>
+                    {errorMsg}
+                </div>
+            )}
+
             {/* Usuario Field */}
             <div className="space-y-2 group">
               <label className="text-neutral-dark dark:text-gray-200 text-sm font-medium pl-1" htmlFor="username">ID de Operario</label>
@@ -35,15 +71,18 @@ const Login: React.FC = () => {
                 <input 
                   className="w-full rounded-full border border-border-light dark:border-border-dark bg-white dark:bg-[#2c2b1f] text-neutral-dark dark:text-white pl-12 pr-4 py-4 text-base focus:border-neutral-dark dark:focus:border-primary focus:ring-1 focus:ring-neutral-dark dark:focus:ring-primary outline-none transition-all placeholder:text-neutral-light/70 dark:placeholder:text-gray-600" 
                   id="username" 
-                  placeholder="Ej. OP-4832" 
+                  placeholder="Ej. OP-4832 o admin" 
                   type="text" 
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
             </div>
 
             {/* Contraseña Field */}
             <div className="space-y-2">
-              <label className="text-neutral-dark dark:text-gray-200 text-sm font-medium pl-1" htmlFor="password">Contraseña</label>
+              <label className="text-neutral-dark dark:text-gray-200 text-sm font-medium pl-1" htmlFor="password">Contraseña (PIN)</label>
               <div className="relative flex items-center">
                 <div className="absolute left-4 text-neutral-light dark:text-gray-500 pointer-events-none flex items-center">
                   <span className="material-symbols-outlined">lock</span>
@@ -51,11 +90,19 @@ const Login: React.FC = () => {
                 <input 
                   className="w-full rounded-full border border-border-light dark:border-border-dark bg-white dark:bg-[#2c2b1f] text-neutral-dark dark:text-white pl-12 pr-12 py-4 text-base focus:border-neutral-dark dark:focus:border-primary focus:ring-1 focus:ring-neutral-dark dark:focus:ring-primary outline-none transition-all placeholder:text-neutral-light/70 dark:placeholder:text-gray-600" 
                   id="password" 
-                  placeholder="••••••••" 
-                  type="password" 
+                  placeholder="••••" 
+                  maxLength={4}
+                  type={showPin ? "text" : "password"} 
+                  value={pin}
+                  onChange={e => setPin(e.target.value)}
+                  disabled={isLoading}
                 />
-                <button className="absolute right-4 text-neutral-light dark:text-gray-500 hover:text-neutral-dark dark:hover:text-white transition-colors flex items-center justify-center p-1 rounded-full focus:outline-none focus:bg-gray-100 dark:focus:bg-white/10" type="button">
-                  <span className="material-symbols-outlined">visibility_off</span>
+                <button 
+                  className="absolute right-4 text-neutral-light dark:text-gray-500 hover:text-neutral-dark dark:hover:text-white transition-colors flex items-center justify-center p-1 rounded-full focus:outline-none focus:bg-gray-100 dark:focus:bg-white/10" 
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                >
+                  <span className="material-symbols-outlined">{showPin ? 'visibility' : 'visibility_off'}</span>
                 </button>
               </div>
             </div>
@@ -64,9 +111,13 @@ const Login: React.FC = () => {
             <div className="h-4"></div>
 
             {/* Action Button */}
-            <button className="relative w-full overflow-hidden rounded-full bg-primary py-4 px-6 text-neutral-dark shadow-md transition-transform hover:scale-[1.01] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:focus:ring-offset-[#1a1a12]" type="submit">
+            <button 
+              className="relative w-full overflow-hidden rounded-full bg-primary py-4 px-6 text-neutral-dark shadow-md transition-transform hover:scale-[1.01] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:focus:ring-offset-[#1a1a12] disabled:opacity-50" 
+              type="submit"
+              disabled={isLoading}
+            >
               <div className="flex items-center justify-center gap-2">
-                <span className="text-base font-bold tracking-wide uppercase">Iniciar Sesión</span>
+                <span className="text-base font-bold tracking-wide uppercase">{isLoading ? 'Conectando...' : 'Iniciar Sesión'}</span>
                 <span className="material-symbols-outlined text-lg font-bold">arrow_forward</span>
               </div>
             </button>

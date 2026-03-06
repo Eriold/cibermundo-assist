@@ -2,6 +2,25 @@ import { run } from "./index.js";
 
 export function initSchema() {
   run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      username TEXT NOT NULL UNIQUE,
+      pin TEXT NOT NULL,
+      is_admin INTEGER NOT NULL DEFAULT 0,
+      can_scan INTEGER NOT NULL DEFAULT 0,
+      can_report INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  // Insertar Admin por defecto (si no hay ninguno)
+  run(`
+    INSERT OR IGNORE INTO users (id, name, username, pin, is_admin, can_scan, can_report, created_at)
+    VALUES (1, 'Administrador', 'admin', '1234', 1, 1, 1, datetime('now'))
+  `);
+
+  run(`
     CREATE TABLE IF NOT EXISTS zones (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,

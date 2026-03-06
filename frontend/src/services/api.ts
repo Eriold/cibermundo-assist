@@ -43,4 +43,57 @@ export const pingApi = async () => {
     }
 }
 
+// ==========================================
+// ZONAS
+// ==========================================
+// Útil para el selector público (solo activas)
+export const getZones = async () => {
+  const res = await api.get('/zones', { params: { active: 1 } });
+  return res.data;
+};
+
+// Útil para el panel de administración (todas)
+export const getAllZones = async () => {
+  const res = await api.get('/zones');
+  return res.data;
+};
+
+export const createZone = async (name: string) => {
+  const res = await api.post('/zones', { name });
+  return res.data;
+};
+
+export const updateZoneStatus = async (id: number, active: boolean) => {
+  const res = await api.patch(`/zones/${id}`, { active });
+  return res.data;
+};
+
+// ==========================================
+// USUARIOS Y LOGIN
+// ==========================================
+export const login = async (username: string, pin: string) => {
+  const res = await api.post('/users/login', { username, pin });
+  return res.data; // { ok: true, user }
+};
+
+export const getUsers = async () => {
+  const res = await api.get('/users');
+  return res.data; // { ok: true, count, users }
+};
+
+export const createUser = async (data: any) => {
+  const res = await api.post('/users', data);
+  return res.data;
+};
+
+export const updateUser = async (id: number, data: any) => {
+  const res = await api.patch(`/users/${id}`, data);
+  return res.data;
+};
+
+export const deleteUser = async (id: number) => {
+  const res = await api.delete(`/users/${id}`);
+  return res.data;
+};
+
 export default api;
