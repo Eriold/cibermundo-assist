@@ -16,10 +16,10 @@ const Dashboard: React.FC = () => {
       <div className="flex items-center justify-between px-6 pb-4 border-b border-gray-200 dark:border-white/10 shrink-0">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => navigate('/scanner')}
+            onClick={() => navigate('/home')}
             className="size-10 bg-white dark:bg-white/10 flex items-center justify-center rounded-full shadow-sm text-dark-text dark:text-white transition-colors hover:bg-gray-100 dark:hover:bg-white/20"
           >
-            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="material-symbols-outlined">home</span>
           </button>
           <div>
             <h1 className="text-2xl font-bold text-dark-text dark:text-white tracking-tight">Panel Administrativo</h1>

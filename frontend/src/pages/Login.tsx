@@ -25,7 +25,7 @@ const Login: React.FC = () => {
       const resp = await login(username, pin);
       if (resp.ok && resp.user) {
         saveSession(resp.user);
-        navigate('/location');
+        navigate('/home');
       }
     } catch (err: any) {
       if (err.response?.status === 401) {

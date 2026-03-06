@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import ScannerModal from '../components/ScannerModal';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../services/useSync';
+import { getSession, getActiveZone } from '../services/auth';
+import type { UserSession } from '../services/auth';
 
 const Scanner: React.FC = () => {
   const navigate = useNavigate();
@@ -11,13 +13,23 @@ const Scanner: React.FC = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  const [user, setUser] = useState<UserSession | null>(null);
+  const [zoneScan, setZoneScan] = useState<string>('Sin Zona');
+
+  useEffect(() => {
+    const sessionUser = getSession();
+    if (sessionUser) setUser(sessionUser);
+    
+    const activeZ = getActiveZone();
+    if (activeZ) setZoneScan(activeZ);
+  }, []);
 
   // Sincronizador Backend local vs Dexie offline
   const { isOnline, isSyncing, pendingCount, processScan, syncPending } = useSync();
 
-  // UI demo
-  const zoneScan = "Almacén Norte";
-  const sessionScanOn = "SESIÓN Melissa";
+  const sessionScanOn = user ? `SESIÓN ${user.name}` : 'SESIÓN';
+
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -109,12 +121,14 @@ const Scanner: React.FC = () => {
       <div className="relative z-20 flex flex-col gap-3 p-4 pt-6 shrink-0">
         <div className="mt-2 bg-white dark:bg-[#181811] rounded-full p-2 pl-3 pr-2 shadow-sm flex items-center justify-between border border-gray-100 dark:border-white/10">
           <div className="flex items-center gap-3">
-             <button 
-                onClick={() => navigate('/dashboard')}
-                className="size-10 bg-primary/20 text-primary flex items-center justify-center rounded-full hover:bg-primary/40 transition-colors"
-             >
-                <span className="material-symbols-outlined">dashboard</span>
-             </button>
+             {user?.roles?.isAdmin && (
+                 <button 
+                    onClick={() => navigate('/home')}
+                    className="size-10 bg-primary/20 text-primary flex items-center justify-center rounded-full hover:bg-primary/40 transition-colors"
+                 >
+                    <span className="material-symbols-outlined">home</span>
+                 </button>
+             )}
              <div className="flex flex-col">
                <span className="text-[10px] uppercase tracking-wider font-bold text-orange-500 dark:text-gray-400">Zona Actual</span>
                <h2 className="text-dark-text dark:text-white text-lg font-bold leading-none">{zoneScan}</h2>

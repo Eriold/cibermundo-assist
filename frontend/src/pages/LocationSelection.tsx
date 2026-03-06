@@ -60,15 +60,18 @@ const LocationSelection: React.FC = () => {
       {/* Top App Bar */}
       <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-white/10">
         <div className="flex items-center gap-3">
-          <div className="bg-surface-light dark:bg-surface-dark p-2 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
-            <span className="material-symbols-outlined text-[#181811] dark:text-primary">qr_code_scanner</span>
-          </div>
+          <button 
+             onClick={() => navigate('/home')}
+             className="bg-surface-light dark:bg-surface-dark p-2 rounded-full shadow-sm border border-gray-100 dark:border-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[#181811] dark:text-primary">arrow_back</span>
+          </button>
           <h2 className="text-lg font-bold tracking-tight">Scanner Pro</h2>
         </div>
         
         <div className="flex items-center gap-2">
             <div className="flex flex-col items-end hidden sm:flex pr-2">
-                <span className="text-xs text-gray-500 font-bold uppercase mapping-wider">Operario</span>
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Operario</span>
                 <span className="text-sm font-bold truncate max-w-[120px]">{user?.name || '...'}</span>
             </div>
             <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors bg-primary/20 text-primary">
@@ -129,8 +132,8 @@ const LocationSelection: React.FC = () => {
         )}
       </main>
 
-      {/* Footer Status */}
-      <footer className="p-4 flex justify-center pb-8 mt-auto">
+      {/* Footer Status & Admin Link */}
+      <footer className="p-4 flex flex-col items-center justify-center pb-8 mt-auto gap-4">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-surface-dark rounded-full shadow-sm border border-gray-100 dark:border-white/5">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
