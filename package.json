@@ -12,7 +12,7 @@
     "dev:backend": "npm run dev --prefix backend",
     "dev:worker": "npm run dev --prefix worker",
     "dev:frontend": "npm run dev --prefix frontend",
-    "install:all": "npm install && npm install --prefix backend && npm install --prefix worker && npm install --prefix frontend",
+    "install:all": "npm install --legacy-peer-deps && npm install --legacy-peer-deps --prefix backend && npm install --legacy-peer-deps --prefix worker && npm install --legacy-peer-deps --prefix frontend",
     "build:all": "npm run build --prefix backend && npm run build --prefix worker && npm run build --prefix frontend"
   },
   "keywords": [],

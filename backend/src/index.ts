@@ -3,7 +3,7 @@ import { createApp } from "./app.js";
 import { initDb } from "./db/index.js";
 import { initSchema } from "./db/schema.js";
 
-const PORT = parseInt(process.env.PORT || "3333", 10);
+const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT || "3444", 10);
 
 async function main() {
   await initDb();
