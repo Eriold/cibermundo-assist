@@ -36,16 +36,52 @@ function generateCSV(data: any[], headers: string[]): string {
   return lines.join("\n");
 }
 
-// Obtener todas las guías
-router.get("/", (_req: Request, res: Response, next: NextFunction) => {
+// Obtener todas las guías (Paginas)
+router.get("/", (req: Request, res: Response, next: NextFunction) => {
   try {
+    const page = parseInt(req.query.page as string || "1", 10);
+    const limit = parseInt(req.query.limit as string || "20", 10);
+    
+    // Fallbacks de seguridad
+    const safePage = page > 0 ? page : 1;
+    const safeLimit = limit > 0 && limit <= 100 ? limit : 20;
+
+    const offset = (safePage - 1) * safeLimit;
+
+    // Primero contamos el total para armar UI en React
+    const countRow = get<{ count: number }>("SELECT COUNT(*) as count FROM shipments");
+    const totalCount = countRow ? countRow.count : 0;
+    const totalPages = Math.ceil(totalCount / safeLimit);
+
+    // Luego jalamos 1 sola pagina con sus Foraneas resueltas (Zonas, Gestiones y Estados)
     const rows = all(`
-      SELECT s.*, z.name as zone_name 
+      SELECT s.*, 
+             z.name as zone_name,
+             st.name as status_name,
+             mg.name as management_name,
+             u.name as checkout_by_name
       FROM shipments s 
-      LEFT JOIN zones z ON s.zone_id = z.id 
+      LEFT JOIN zones z ON s.zone_id = z.id
+      LEFT JOIN statuses st ON s.status_id = st.id
+      LEFT JOIN managements mg ON s.management_id = mg.id
+      LEFT JOIN users u ON s.checkout_by = u.id
       ORDER BY s.scanned_at DESC
-    `);
-    res.json(rows);
+      LIMIT :limit OFFSET :offset
+    `, { 
+        limit: safeLimit, 
+        offset: offset 
+    });
+
+    res.json({
+        data: rows,
+        pagination: {
+            page: safePage,
+            limit: safeLimit,
+            totalCount,
+            totalPages
+        }
+    });
+
   } catch (e) {
     next(e);
   }
@@ -164,48 +200,77 @@ router.get("/export", (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// PATCH /:trackingNumber - Actualizar número de guía
+// PATCH /:trackingNumber - Actualizar número de guía y/o Detalles (Fase 7)
 router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { trackingNumber } = req.params;
-    const { newTrackingNumber } = req.body;
-
-    if (!newTrackingNumber || typeof newTrackingNumber !== "string") {
-      return res.status(400).json({ error: "newTrackingNumber is required and must be a string" });
-    }
-
-    const trimmedNew = newTrackingNumber.trim();
-
-    if (!/^\d{4,20}$/.test(trimmedNew)) {
-      return res.status(400).json({ error: "El nuevo número de guía debe contener solo de 4 a 20 números." });
-    }
+    const body = req.body;
+    let oldTracking = trackingNumber;
 
     // Verificar si el viejo existe
-    const existing = get("SELECT tracking_number FROM shipments WHERE tracking_number = :old", { ":old": trackingNumber });
+    const existing = get("SELECT tracking_number FROM shipments WHERE tracking_number = :old", { ":old": oldTracking });
     if (!existing) {
       return res.status(404).json({ error: "Guía original no encontrada" });
     }
 
-    if (trackingNumber === trimmedNew) {
-      return res.json({ ok: true, message: "Sin cambios" });
+    // 1. Manejar cambio crítico de tracking_number (LLave Primaria Conceptual y vinculo a Jobs)
+    if (body.newTrackingNumber && typeof body.newTrackingNumber === "string") {
+      const trimmedNew = body.newTrackingNumber.trim();
+      
+      if (!/^\d{4,20}$/.test(trimmedNew)) {
+        return res.status(400).json({ error: "El nuevo número de guía debe contener solo de 4 a 20 números." });
+      }
+
+      if (oldTracking !== trimmedNew) {
+         // Verificar colisión con el nuevo
+         const duplicate = get("SELECT tracking_number FROM shipments WHERE tracking_number = :new", { ":new": trimmedNew });
+         if (duplicate) {
+            return res.status(409).json({ error: "Esta guía ya se encuentra registrada en el sistema." });
+         }
+
+         run("UPDATE shipments SET tracking_number = :new WHERE tracking_number = :old", {
+           ":old": oldTracking,
+           ":new": trimmedNew
+         });
+
+         run("UPDATE jobs SET tracking_number = :new WHERE tracking_number = :old", {
+           ":old": oldTracking,
+           ":new": trimmedNew
+         });
+
+         oldTracking = trimmedNew; // Actualizamos para el posterior pass de variables de fase 7
+      }
     }
 
-    // Verificar colisión con el nuevo
-    const duplicate = get("SELECT tracking_number FROM shipments WHERE tracking_number = :new", { ":new": trimmedNew });
-    if (duplicate) {
-       return res.status(409).json({ error: "Esta guía ya se encuentra registrada en el sistema. Debes eliminar o editar la guía duplicada original antes de ingresarla aquí." });
+    // 2. Manejar actualización de campos dinámicos Fase 7
+    const updatableFields = [
+      'client_name', 'client_phone', 
+      'obs_1', 'obs_2', 'obs_3', 
+      'status_id', 'management_id', 
+      'checkout_date', 'checkout_by', 'zone_id',
+      'amount_total'
+    ];
+
+    const updates: string[] = [];
+    const params: Record<string, any> = { ":tracking": oldTracking };
+
+    for (const field of updatableFields) {
+      if (body[field] !== undefined) {
+        updates.push(`${field} = :${field}`);
+        
+        // Manejar strings vacías como NULL para Foreign Keys o fechas
+        if (body[field] === "" && ['status_id', 'management_id', 'zone_id', 'checkout_date'].includes(field)) {
+             params[`:${field}`] = null;
+        } else {
+             params[`:${field}`] = body[field];
+        }
+      }
     }
 
-    // Update shipments y jobs
-    run("UPDATE shipments SET tracking_number = :new WHERE tracking_number = :old", {
-      ":old": trackingNumber,
-      ":new": trimmedNew
-    });
-
-    run("UPDATE jobs SET tracking_number = :new WHERE tracking_number = :old", {
-      ":old": trackingNumber,
-      ":new": trimmedNew
-    });
+    if (updates.length > 0) {
+      const sql = `UPDATE shipments SET ${updates.join(', ')} WHERE tracking_number = :tracking`;
+      run(sql, params);
+    }
 
     res.json({ ok: true, message: "Guía actualizada correctamente" });
   } catch (e) {

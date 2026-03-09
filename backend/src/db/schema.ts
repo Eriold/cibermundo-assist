@@ -30,6 +30,39 @@ export function initSchema() {
   `);
 
   run(`
+    CREATE TABLE IF NOT EXISTS statuses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  run(`
+    INSERT OR IGNORE INTO statuses (id, name, active, created_at)
+    VALUES 
+      (1, 'Abierto', 1, datetime('now')),
+      (2, 'Cerrado', 1, datetime('now'))
+  `);
+
+  run(`
+    CREATE TABLE IF NOT EXISTS managements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  run(`
+    INSERT OR IGNORE INTO managements (id, name, active, created_at)
+    VALUES 
+      (1, 'Sin gestión', 1, datetime('now')),
+      (2, 'Entregado', 1, datetime('now')),
+      (3, 'Devuelto', 1, datetime('now'))
+  `);
+
+  run(`
     CREATE TABLE IF NOT EXISTS shipments (
       tracking_number TEXT PRIMARY KEY,
       created_at TEXT NOT NULL,
@@ -40,9 +73,20 @@ export function initSchema() {
 
       delivery_type TEXT NOT NULL,
       zone_id INTEGER,
+      status_id INTEGER DEFAULT 1,      -- 1: Abierto
+      management_id INTEGER DEFAULT 1,  -- 1: Sin gestion
 
       office_status TEXT NOT NULL DEFAULT 'PAQUETE_INGRESADO',
       notes TEXT,
+      obs_1 TEXT,
+      obs_2 TEXT,
+      obs_3 TEXT,
+
+      client_name TEXT,
+      client_phone TEXT,
+      checkout_date TEXT,
+      checkout_by INTEGER,
+      message_sent INTEGER DEFAULT 0,
 
       recipient_name TEXT,
       recipient_id TEXT,
@@ -77,8 +121,18 @@ export function initSchema() {
       scanned_by TEXT NOT NULL,
       delivery_type TEXT NOT NULL,
       zone_id INTEGER,
+      status_id INTEGER,
+      management_id INTEGER,
       office_status TEXT NOT NULL,
       notes TEXT,
+      obs_1 TEXT,
+      obs_2 TEXT,
+      obs_3 TEXT,
+      client_name TEXT,
+      client_phone TEXT,
+      checkout_date TEXT,
+      checkout_by INTEGER,
+      message_sent INTEGER DEFAULT 0,
       recipient_name TEXT,
       recipient_id TEXT,
       recipient_phone TEXT,

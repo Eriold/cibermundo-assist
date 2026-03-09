@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import ShipmentsTab from '../components/admin/ShipmentsTab';
-import UsersTab from '../components/admin/UsersTab';
-import ZonesTab from '../components/admin/ZonesTab';
-
-type TabType = 'shipments' | 'users' | 'zones';
+import React from 'react';
+import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('shipments');
+  const location = useLocation();
+
+  const getTabClass = (isActive: boolean, path: string) => {
+    return `flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
+      isActive || (location.pathname === '/dashboard' && path === 'monitor')
+        ? 'border-primary text-primary' 
+        : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+    }`;
+  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark font-display h-screen w-full flex flex-col pt-6 overflow-hidden">
@@ -31,47 +34,33 @@ const Dashboard: React.FC = () => {
       {/* Tabs Navigation */}
       <div className="px-6 pt-4 shrink-0 overflow-x-auto hide-scrollbar">
         <div className="flex gap-2 border-b border-gray-200 dark:border-white/5 pb-0">
-          <button
-            onClick={() => setActiveTab('shipments')}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'shipments' 
-                ? 'border-primary text-primary' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
+          <NavLink to="/dashboard/monitor" className={({ isActive }) => getTabClass(isActive, 'monitor')}>
+            <span className="material-symbols-outlined text-[18px]">visibility</span>
+            Monitor
+          </NavLink>
+          <NavLink to="/dashboard/shipments" className={({ isActive }) => getTabClass(isActive, 'shipments')}>
             <span className="material-symbols-outlined text-[18px]">inventory</span>
             Historial de Guías
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'users' 
-                ? 'border-primary text-primary' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
+          </NavLink>
+          <NavLink to="/dashboard/users" className={({ isActive }) => getTabClass(isActive, 'users')}>
             <span className="material-symbols-outlined text-[18px]">group</span>
             Usuarios y Roles
-          </button>
-          <button
-            onClick={() => setActiveTab('zones')}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'zones' 
-                ? 'border-primary text-primary' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
+          </NavLink>
+          <NavLink to="/dashboard/zones" className={({ isActive }) => getTabClass(isActive, 'zones')}>
             <span className="material-symbols-outlined text-[18px]">map</span>
             Gestión de Zonas
-          </button>
+          </NavLink>
+          <NavLink to="/dashboard/catalogs" className={({ isActive }) => getTabClass(isActive, 'catalogs')}>
+            <span className="material-symbols-outlined text-[18px]">category</span>
+            Catálogos y Estados
+          </NavLink>
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area (Layout Body) */}
       <div className="flex-1 p-6 overflow-hidden flex flex-col min-h-0 bg-[#f8f9fa] dark:bg-transparent">
-        {activeTab === 'shipments' && <ShipmentsTab />}
-        {activeTab === 'users' && <UsersTab />}
-        {activeTab === 'zones' && <ZonesTab />}
+         {/* Sub-componentes inyectados aquí */}
+         <Outlet />
       </div>
     </div>
   );

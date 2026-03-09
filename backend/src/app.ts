@@ -11,6 +11,8 @@ import jobsRoutes from "./routes/jobs.routes.js";
 import testRoutes from "./routes/test.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import usersRoutes from "./routes/users.routes.js";
+import statusesRoutes from "./routes/statuses.routes.js";
+import managementsRoutes from "./routes/managements.routes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +47,8 @@ export function createApp() {
   app.use("/test", testRoutes);
   app.use("/admin", adminRoutes);
   app.use("/users", usersRoutes);
+  app.use("/statuses", statusesRoutes);
+  app.use("/managements", managementsRoutes);
 
   return app;
 }

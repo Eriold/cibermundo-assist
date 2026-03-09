@@ -32,8 +32,8 @@ export const getShipments = async (params = {}) => {
   return res.data;
 };
 
-export const updateShipmentTracking = async (oldTracking: string, newTracking: string) => {
-  const res = await api.patch(`/shipments/${oldTracking}`, { newTrackingNumber: newTracking });
+export const updateShipmentTracking = async (oldTracking: string, updateData: any) => {
+  const res = await api.patch(`/shipments/${oldTracking}`, updateData);
   return res.data;
 };
 
@@ -109,6 +109,50 @@ export const updateUser = async (id: number, data: any) => {
 
 export const deleteUser = async (id: number) => {
   const res = await api.delete(`/users/${id}`);
+  return res.data;
+};
+
+// ==========================================
+// CATÁLOGOS: ESTADOS Y GESTIONES
+// ==========================================
+export const getStatuses = async () => {
+  const res = await api.get('/statuses');
+  return res.data;
+};
+
+export const createStatus = async (name: string) => {
+  const res = await api.post('/statuses', { name });
+  return res.data;
+};
+
+export const updateStatus = async (id: number, data: { name?: string, active?: boolean }) => {
+  const res = await api.patch(`/statuses/${id}`, data);
+  return res.data;
+};
+
+export const deleteStatus = async (id: number) => {
+  const res = await api.delete(`/statuses/${id}`);
+  return res.data;
+};
+
+// ---
+export const getManagements = async () => {
+  const res = await api.get('/managements');
+  return res.data;
+};
+
+export const createManagement = async (name: string) => {
+  const res = await api.post('/managements', { name });
+  return res.data;
+};
+
+export const updateManagement = async (id: number, data: { name?: string, active?: boolean }) => {
+  const res = await api.patch(`/managements/${id}`, data);
+  return res.data;
+};
+
+export const deleteManagement = async (id: number) => {
+  const res = await api.delete(`/managements/${id}`);
   return res.data;
 };
 
