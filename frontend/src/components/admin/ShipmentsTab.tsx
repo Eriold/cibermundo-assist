@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { getShipments, deleteShipment, getStatuses, getManagements, updateShipmentTracking } from '../../services/api';
 import { getSession } from '../../services/auth';
 
+type TabMode = 'open' | 'closed';
+
 interface Shipment {
   tracking_number: string;
   scanned_at: string;
@@ -47,9 +49,13 @@ const ShipmentsTab: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
 
+  // Filter Tabs
+  const [activeTab, setActiveTab] = useState<TabMode>('open');
+
   // Pagination & Filtering state
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Edit Form Fields
   const [editForm, setEditForm] = useState<Partial<Shipment>>({});
@@ -70,12 +76,12 @@ const ShipmentsTab: React.FC = () => {
     }
   };
 
-  const fetchShipments = async (silent = false, specificPage = page) => {
+  const fetchShipments = async (silent = false, specificPage = page, query = searchTerm) => {
     if (!silent) setLoading(true);
     if (!silent) setErrorMsg('');
     try {
       // Pedimos datos paginados al backend usando axios param
-      const data = await getShipments({ page: specificPage, limit: 20 });
+      const data = await getShipments({ page: specificPage, limit: 20, search: query });
       setShipments(data.data || []);
       
       // Actualizamos metadatos de paginacion retornados del backend expr
@@ -135,7 +141,7 @@ const ShipmentsTab: React.FC = () => {
       await updateShipmentTracking(editingShipment.tracking_number, payload);
       
       setShowEditModal(false);
-      fetchShipments(false);
+      fetchShipments(false, page, searchTerm);
 
     } catch (err: any) {
       setErrorMsg(err.response?.data?.error || 'Error al actualizar');
@@ -150,7 +156,7 @@ const ShipmentsTab: React.FC = () => {
     try {
       await deleteShipment(shipmentToDelete.tracking_number);
       setShowDeleteModal(false);
-      fetchShipments(false);
+      fetchShipments(false, page, searchTerm);
     } catch (err: any) {
       alert(err.response?.data?.error || "Error al eliminar");
     } finally {
@@ -160,7 +166,7 @@ const ShipmentsTab: React.FC = () => {
 
   useEffect(() => {
     fetchCatalogs();
-    fetchShipments(false, 1);
+    fetchShipments(false, 1, '');
   }, []);
 
   // Poll interval effect
@@ -168,7 +174,7 @@ const ShipmentsTab: React.FC = () => {
     let interval: ReturnType<typeof setInterval>;
     if (autoRefresh) {
       interval = setInterval(() => {
-        fetchShipments(true, page);
+        fetchShipments(true, page, searchTerm);
       }, 10000);
     }
     return () => {
@@ -205,8 +211,11 @@ const ShipmentsTab: React.FC = () => {
         {/* Actions Bar */}
         <div className="flex justify-between items-center mb-4 shrink-0">
             <div>
-              <h2 className="text-xl font-bold text-dark-text dark:text-white">Gestión de Guías (Abiertas)</h2>
-              <p className="text-sm text-gray-500">Panel detallado. Excluye despachos en estado cerrado.</p>
+              <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-max">
+                  <button onClick={() => setActiveTab('open')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'open' ? 'bg-white text-dark-text shadow-sm dark:bg-[#2c2b1f] dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>Guías Abiertas</button>
+                  <button onClick={() => setActiveTab('closed')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'closed' ? 'bg-white text-dark-text shadow-sm dark:bg-[#2c2b1f] dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>Archivadas / Cerradas</button>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">{activeTab === 'open' ? 'Excluye despachos en estado cerrado o finalizado.' : 'Solo guías con Check-out definitivo (Cerradas).'}</p>
             </div>
             <div className="flex items-center gap-4">
                 <label className="hidden sm:flex items-center gap-2 cursor-pointer select-none">
@@ -222,7 +231,7 @@ const ShipmentsTab: React.FC = () => {
                     </div>
                 </label>
                 <button 
-                    onClick={() => fetchShipments(false)}
+                    onClick={() => fetchShipments(false, page, searchTerm)}
                     disabled={loading}
                     className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95 disabled:opacity-50"
                 >
@@ -241,9 +250,29 @@ const ShipmentsTab: React.FC = () => {
 
         {/* Filters and Pagination Controls Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 shrink-0 bg-white dark:bg-[#181811] p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-white/10">
-            <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-gray-400">filter_alt</span>
-                <span className="text-sm font-bold text-gray-500">Paginación Activa</span>
+            <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 px-4 py-2 rounded-xl border border-transparent focus-within:border-primary focus-within:bg-white dark:focus-within:bg-[#2c2b1f] transition-all w-full md:w-80">
+                    <span className="material-symbols-outlined text-gray-400">search</span>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar por número de guía..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && fetchShipments(false, 1, searchTerm)}
+                        className="bg-transparent border-none outline-none w-full text-sm font-bold text-dark-text dark:text-white placeholder-gray-400"
+                    />
+                    {searchTerm && (
+                        <button onClick={() => { setSearchTerm(''); fetchShipments(false, 1, ''); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-white rounded-full flex items-center justify-center">
+                            <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                    )}
+                </div>
+                <button
+                    onClick={() => fetchShipments(false, 1, searchTerm)}
+                    className="hidden sm:flex items-center justify-center bg-primary text-black font-bold px-4 py-2 rounded-xl shrink-0 transition-transform active:scale-95 hover:bg-primary-dark"
+                >
+                    Buscar
+                </button>
             </div>
             <div className="flex items-center gap-3">
                 <button 
@@ -281,26 +310,38 @@ const ShipmentsTab: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                    {loading && shipments.length === 0 ? (
-                        <tr>
-                            <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
-                                <div className="flex flex-col items-center justify-center">
-                                    <span className="material-symbols-outlined animate-spin text-4xl mb-2">progress_activity</span>
-                                    <p className="font-bold">Cargando...</p>
-                                </div>
-                            </td>
-                        </tr>
-                    ) : (shipments as any[]).filter((s: any) => s.status_name !== 'Cerrado').length === 0 ? (
-                        <tr>
-                            <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
-                                <div className="flex flex-col items-center justify-center">
-                                    <span className="material-symbols-outlined text-4xl mb-2 opacity-50">inbox</span>
-                                    <p className="font-bold">No hay guías registradas.</p>
-                                </div>
-                            </td>
-                        </tr>
-                    ) : (
-                        (shipments as any[]).filter((s: any) => s.status_name !== 'Cerrado').map((ship: any, i: number) => (
+                    {(() => {
+                        const filteredShipments = (shipments as any[]).filter((s: any) => 
+                            activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado'
+                        );
+
+                        if (loading && shipments.length === 0) {
+                            return (
+                                <tr>
+                                    <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <span className="material-symbols-outlined animate-spin text-4xl mb-2">progress_activity</span>
+                                            <p className="font-bold">Cargando...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        }
+
+                        if (filteredShipments.length === 0) {
+                            return (
+                                <tr>
+                                    <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <span className="material-symbols-outlined text-4xl mb-2 opacity-50">inbox</span>
+                                            <p className="font-bold">No hay guías registradas en este apartado.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        }
+
+                        return filteredShipments.map((ship: any, i: number) => (
                         <tr key={ship.tracking_number + i} className="hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors">
                             <td className="p-4">
                                 <div className="flex items-center gap-3">
@@ -359,14 +400,16 @@ const ShipmentsTab: React.FC = () => {
                                 </div>
                             </td>
                         </tr>
-                        ))
-                    )}
+                        ));
+                    })()}
                 </tbody>
                 <tfoot className="sticky bottom-0 bg-gray-100 dark:bg-[#1f1e16] border-t border-gray-200 dark:border-white/10 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <tr>
-                        <td colSpan={5} className="p-4 text-right font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest text-sm">Total Abierto:</td>
+                        <td colSpan={5} className="p-4 text-right font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest text-sm">Total a Recolectar ({(shipments as any[]).filter((s: any) => 
+                            activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado'
+                        ).length}):</td>
                         <td className="p-4 font-black text-primary text-lg">
-                            ${(shipments as any[]).filter((s: any) => s.status_name !== 'Cerrado').reduce((sum: number, s: any) => sum + (s.amount_total || 0), 0).toLocaleString()}
+                            ${(shipments as any[]).filter((s: any) => activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado').reduce((sum: number, s: any) => sum + (s.amount_total || 0), 0).toLocaleString()}
                         </td>
                         <td></td>
                     </tr>

@@ -41,20 +41,30 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string || "1", 10);
     const limit = parseInt(req.query.limit as string || "20", 10);
-    
+    const search = req.query.search as string;
+
     // Fallbacks de seguridad
     const safePage = page > 0 ? page : 1;
     const safeLimit = limit > 0 && limit <= 100 ? limit : 20;
 
     const offset = (safePage - 1) * safeLimit;
 
+    let whereClause = "1=1";
+    const params: Record<string, any> = { limit: safeLimit, offset: offset };
+
+    if (search) {
+      whereClause += " AND s.tracking_number LIKE :search";
+      params.search = `%${search}%`;
+    }
+
     // Primero contamos el total para armar UI en React
-    const countRow = get<{ count: number }>("SELECT COUNT(*) as count FROM shipments");
+    let countSql = `SELECT COUNT(*) as count FROM shipments s WHERE ${whereClause}`;
+    const countRow = get<{ count: number }>(countSql, search ? { search: params.search } : {});
     const totalCount = countRow ? countRow.count : 0;
     const totalPages = Math.ceil(totalCount / safeLimit);
 
     // Luego jalamos 1 sola pagina con sus Foraneas resueltas (Zonas, Gestiones y Estados)
-    const rows = all(`
+    let sql = `
       SELECT s.*, 
              z.name as zone_name,
              st.name as status_name,
@@ -65,12 +75,11 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
       LEFT JOIN statuses st ON s.status_id = st.id
       LEFT JOIN managements mg ON s.management_id = mg.id
       LEFT JOIN users u ON s.checkout_by = u.id
+      WHERE ${whereClause}
       ORDER BY s.scanned_at DESC
       LIMIT :limit OFFSET :offset
-    `, { 
-        limit: safeLimit, 
-        offset: offset 
-    });
+    `;
+    const rows = all(sql, params);
 
     res.json({
         data: rows,
