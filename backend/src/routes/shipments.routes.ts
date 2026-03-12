@@ -57,9 +57,37 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
       params.search = `%${search}%`;
     }
 
+    if (req.query.zoneId && typeof req.query.zoneId === "string") {
+        const zId = parseInt(req.query.zoneId, 10);
+        if (!isNaN(zId) && zId > 0) {
+            whereClause += " AND s.zone_id = :zoneId";
+            params.zoneId = zId;
+        }
+    }
+
+    if (req.query.managementId && typeof req.query.managementId === "string") {
+        const mId = parseInt(req.query.managementId, 10);
+        if (!isNaN(mId) && mId > 0) {
+            whereClause += " AND s.management_id = :managementId";
+            params.managementId = mId;
+        }
+    }
+
+    if (req.query.dateFrom && typeof req.query.dateFrom === "string") {
+        whereClause += " AND s.scanned_at >= :dateFrom";
+        params.dateFrom = req.query.dateFrom;
+    }
+
+    if (req.query.dateTo && typeof req.query.dateTo === "string") {
+        // Asumiendo que viene en formato YYYY-MM-DD, le añadimos horas al final del día por si acaso,
+        // o asumimos que el frontend manda ISO completo. Lo trataremos como string literal para comparación de diccionarios sqlite.
+        whereClause += " AND s.scanned_at <= :dateTo";
+        params.dateTo = req.query.dateTo + "T23:59:59.999Z"; // Acaparar todo el día final
+    }
+
     // Primero contamos el total para armar UI en React
     let countSql = `SELECT COUNT(*) as count FROM shipments s WHERE ${whereClause}`;
-    const countRow = get<{ count: number }>(countSql, search ? { search: params.search } : {});
+    const countRow = get<{ count: number }>(countSql, params);
     const totalCount = countRow ? countRow.count : 0;
     const totalPages = Math.ceil(totalCount / safeLimit);
 

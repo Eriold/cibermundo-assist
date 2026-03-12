@@ -56,6 +56,13 @@ const ShipmentsTab: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    zoneId: '',
+    managementId: '',
+    dateFrom: '',
+    dateTo: ''
+  });
   
   // Edit Form Fields
   const [editForm, setEditForm] = useState<Partial<Shipment>>({});
@@ -76,12 +83,12 @@ const ShipmentsTab: React.FC = () => {
     }
   };
 
-  const fetchShipments = async (silent = false, specificPage = page, query = searchTerm) => {
+  const fetchShipments = async (silent = false, specificPage = page, query = searchTerm, currentFilters = filters) => {
     if (!silent) setLoading(true);
     if (!silent) setErrorMsg('');
     try {
       // Pedimos datos paginados al backend usando axios param
-      const data = await getShipments({ page: specificPage, limit: 20, search: query });
+      const data = await getShipments({ page: specificPage, limit: 20, search: query, ...currentFilters });
       setShipments(data.data || []);
       
       // Actualizamos metadatos de paginacion retornados del backend expr
@@ -141,7 +148,7 @@ const ShipmentsTab: React.FC = () => {
       await updateShipmentTracking(editingShipment.tracking_number, payload);
       
       setShowEditModal(false);
-      fetchShipments(false, page, searchTerm);
+      fetchShipments(false, page, searchTerm, filters);
 
     } catch (err: any) {
       setErrorMsg(err.response?.data?.error || 'Error al actualizar');
@@ -156,7 +163,7 @@ const ShipmentsTab: React.FC = () => {
     try {
       await deleteShipment(shipmentToDelete.tracking_number);
       setShowDeleteModal(false);
-      fetchShipments(false, page, searchTerm);
+      fetchShipments(false, page, searchTerm, filters);
     } catch (err: any) {
       alert(err.response?.data?.error || "Error al eliminar");
     } finally {
@@ -166,7 +173,7 @@ const ShipmentsTab: React.FC = () => {
 
   useEffect(() => {
     fetchCatalogs();
-    fetchShipments(false, 1, '');
+    fetchShipments(false, 1, '', filters);
   }, []);
 
   // Poll interval effect
@@ -174,7 +181,7 @@ const ShipmentsTab: React.FC = () => {
     let interval: ReturnType<typeof setInterval>;
     if (autoRefresh) {
       interval = setInterval(() => {
-        fetchShipments(true, page, searchTerm);
+        fetchShipments(true, page, searchTerm, filters);
       }, 10000);
     }
     return () => {
@@ -186,7 +193,7 @@ const ShipmentsTab: React.FC = () => {
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
-      fetchShipments(false, newPage);
+      fetchShipments(false, newPage, searchTerm, filters);
     }
   };
 
@@ -231,7 +238,14 @@ const ShipmentsTab: React.FC = () => {
                     </div>
                 </label>
                 <button 
-                    onClick={() => fetchShipments(false, page, searchTerm)}
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors ${showFilters ? 'bg-primary text-black' : 'bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white'}`}
+                >
+                    <span className="material-symbols-outlined text-[18px]">tune</span>
+                    Filtros
+                </button>
+                <button 
+                    onClick={() => fetchShipments(false, page, searchTerm, filters)}
                     disabled={loading}
                     className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95 disabled:opacity-50"
                 >
@@ -248,6 +262,76 @@ const ShipmentsTab: React.FC = () => {
           </div>
         )}
 
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+            <div className="bg-white dark:bg-[#181811] rounded-2xl p-5 mb-4 shadow-sm border border-gray-100 dark:border-white/10 animate-fade-in-down shrink-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Zona</label>
+                        <input 
+                            type="number" 
+                            placeholder="ID de Zona"
+                            value={filters.zoneId}
+                            onChange={(e) => setFilters(prev => ({...prev, zoneId: e.target.value}))}
+                            className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Gestión</label>
+                        <select 
+                            value={filters.managementId}
+                            onChange={(e) => setFilters(prev => ({...prev, managementId: e.target.value}))}
+                            className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary cursor-pointer"
+                        >
+                            <option value="">Todas las gestiones</option>
+                            {managements.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Desde (Fecha Ingreso)</label>
+                        <input 
+                            type="date" 
+                            value={filters.dateFrom}
+                            onChange={(e) => setFilters(prev => ({...prev, dateFrom: e.target.value}))}
+                            className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Hasta (Fecha Ingreso)</label>
+                        <input 
+                            type="date" 
+                            value={filters.dateTo}
+                            onChange={(e) => setFilters(prev => ({...prev, dateTo: e.target.value}))}
+                            className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
+                        />
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-white/10">
+                    <button 
+                        onClick={() => {
+                            const cleared = {zoneId: '', managementId: '', dateFrom: '', dateTo: ''};
+                            setFilters(cleared);
+                            setPage(1);
+                            fetchShipments(false, 1, searchTerm, cleared);
+                        }}
+                        className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                    >
+                        Limpiar Filtros
+                    </button>
+                    <button 
+                        onClick={() => {
+                            setPage(1);
+                            fetchShipments(false, 1, searchTerm, filters);
+                        }}
+                        className="px-4 py-2 rounded-xl text-sm font-bold text-black bg-primary hover:bg-primary-dark shadow-sm transition-colors flex items-center gap-2"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">search</span>
+                        Aplicar Filtros
+                    </button>
+                </div>
+            </div>
+        )}
+
         {/* Filters and Pagination Controls Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 shrink-0 bg-white dark:bg-[#181811] p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-white/10">
             <div className="flex items-center gap-4 w-full md:w-auto">
@@ -258,17 +342,22 @@ const ShipmentsTab: React.FC = () => {
                         placeholder="Buscar por número de guía..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && fetchShipments(false, 1, searchTerm)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                setPage(1);
+                                fetchShipments(false, 1, searchTerm, filters);
+                            }
+                        }}
                         className="bg-transparent border-none outline-none w-full text-sm font-bold text-dark-text dark:text-white placeholder-gray-400"
                     />
                     {searchTerm && (
-                        <button onClick={() => { setSearchTerm(''); fetchShipments(false, 1, ''); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-white rounded-full flex items-center justify-center">
+                        <button onClick={() => { setSearchTerm(''); fetchShipments(false, 1, '', filters); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-white rounded-full flex items-center justify-center">
                             <span className="material-symbols-outlined text-[16px]">close</span>
                         </button>
                     )}
                 </div>
                 <button
-                    onClick={() => fetchShipments(false, 1, searchTerm)}
+                    onClick={() => { setPage(1); fetchShipments(false, 1, searchTerm, filters); }}
                     className="hidden sm:flex items-center justify-center bg-primary text-black font-bold px-4 py-2 rounded-xl shrink-0 transition-transform active:scale-95 hover:bg-primary-dark"
                 >
                     Buscar
@@ -383,6 +472,21 @@ const ShipmentsTab: React.FC = () => {
                             </td>
                             <td className="p-4 text-sm font-medium">
                                 <div className="flex justify-end gap-2">
+                                    <button
+                                        onClick={() => {
+                                            const qs = new URLSearchParams();
+                                            if (searchTerm) qs.append('search', searchTerm);
+                                            if (filters.zoneId) qs.append('zoneId', filters.zoneId);
+                                            if (filters.managementId) qs.append('managementId', filters.managementId);
+                                            if (filters.dateFrom) qs.append('dateFrom', filters.dateFrom);
+                                            if (filters.dateTo) qs.append('dateTo', filters.dateTo);
+                                            window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3333'}/shipments/export?${qs.toString()}`, '_blank');
+                                        }}
+                                        className="size-10 rounded-xl bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors tooltip shrink-0"
+                                        title="Exportar Filtradas a CSV"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">download</span>
+                                    </button>
                                     <button
                                         onClick={() => handleOpenEdit(ship)}
                                         className="size-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 flex items-center justify-center transition-colors"
