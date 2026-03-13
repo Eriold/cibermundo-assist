@@ -28,7 +28,6 @@ class PaymentWebSingleton {
   private context: BrowserContext | null = null;
   private page: Page | null = null;
   private shipmentUrl = "https://www3.interrapidisimo.com/WebExterno/Consulta/Carga.aspx";
-  private headless = true;
 
   async init(): Promise<void> {
     if (this.browser) {
@@ -38,10 +37,25 @@ class PaymentWebSingleton {
 
     // Leer env var HEADLESS (por defecto true, HEADLESS=false lanza visible)
     const headless = process.env.HEADLESS !== "false";
-    console.log("[PAYMENT_PW] headless:", headless);
+    console.log("[PAYMENT_PW] Launching browser (headless:", headless, ")");
 
-    this.browser = await chromium.launch({ headless });
-    this.context = await this.browser.newContext();
+    this.browser = await chromium.launch({ 
+      headless,
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--no-sandbox",
+        "--disable-setuid-sandbox"
+      ],
+      ignoreDefaultArgs: ["--enable-automation"]
+    });
+    
+    this.context = await this.browser.newContext({
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+      javaScriptEnabled: true
+    });
+    
     this.page = await this.context.newPage();
 
     // Listeners de debug para diagnosticar pantalla en blanco
@@ -65,7 +79,7 @@ class PaymentWebSingleton {
     this.page.setDefaultTimeout(25000);
     this.page.setDefaultNavigationTimeout(45000);
 
-    console.log("[PAYMENT_PW] Browser initialized (slow network mode: timeouts 25s/45s)");
+    console.log("[PAYMENT_PW] Browser initialized with stealth settings");
   }
 
   async fetch(trackingNumber: string): Promise<PaymentWebResponse> {
@@ -73,33 +87,19 @@ class PaymentWebSingleton {
       throw new Error("Browser not initialized. Call init() first.");
     }
 
-    const page = this.page; // Capturar en variable local para evitar null checks
+    const page = this.page;
     const attemptFetch = async (attemptNum: number): Promise<PaymentWebResponse> => {
       try {
-        // Navegar a página si no está ya en la ruta correcta
         const currentUrl = page.url();
         if (!currentUrl.startsWith("https://www3.interrapidisimo.com/SiguetuEnvio/shipment")) {
           console.log(`[PAYMENT_PW] Navigating to shipment page (attempt ${attemptNum})...`);
-          console.log(`[PAYMENT_PW] URL before goto: ${page.url()}`);
-          try {
-            await page.goto("https://www3.interrapidisimo.com/SiguetuEnvio/shipment", { waitUntil: "domcontentloaded" });
-            console.log(`[PAYMENT_PW] URL after goto: ${page.url()}`);
-            await page.screenshot({ path: "pw-after-goto.png", fullPage: true });
-            console.log("[PAYMENT_PW] Screenshot saved to pw-after-goto.png");
-          } catch (error) {
-            console.error("[PAYMENT_PW] Error during goto:", error);
-            throw error;
-          }
+          await page.goto("https://www3.interrapidisimo.com/SiguetuEnvio/shipment", { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(1000); // Dar un poco de tiempo para scripts
         }
 
         // Esperar selector visible
         console.log(`[PAYMENT_PW] Waiting for #inputGuide visible (attempt ${attemptNum})...`);
-        try {
-          await page.waitForSelector("#inputGuide", { timeout: 10000 });
-        } catch (error) {
-          console.error("[PAYMENT_PW] Error waiting for #inputGuide:", error);
-          throw error;
-        }
+        await page.waitForSelector("#inputGuide", { timeout: 15000 });
 
         // Limpiar y escribir tracking number
         console.log(`[PAYMENT_PW] Filling #inputGuide with ${trackingNumber}`);
@@ -107,56 +107,40 @@ class PaymentWebSingleton {
         await page.keyboard.down("Control");
         await page.keyboard.press("A");
         await page.keyboard.up("Control");
-        await page.type("#inputGuide", trackingNumber, { delay: 15 });
+        await page.keyboard.press("Backspace");
+        await page.type("#inputGuide", trackingNumber, { delay: 30 });
 
         // Crear el waitForResponse BEFORE triggering search
-        // Timeout aumentado para conexiones lentas (min 15000ms)
-        console.log("[PAYMENT_PW] waiting response (slow network mode)");
+        console.log("[PAYMENT_PW] Waiting for API response...");
         const waitForResponsePromise = page.waitForResponse(
           (response: any) =>
             response.url().includes("ObtenerRastreoGuiasClientePost") &&
             response.request().method() === "POST" &&
             response.status() === 200,
-          { timeout: 25000 }
+          { timeout: 30000 }
         );
 
-        // Disparar búsqueda con ENTER primero
-        console.log("[PAYMENT_PW] Pressing ENTER to search...");
+        // Disparar búsqueda con ENTER
         await page.keyboard.press("Enter");
 
-        // Si en 800ms no hay response, hacer click
+        // Fallback: si ENTER no funciona, intentar clic en el botón de búsqueda
         let responseReceived = false;
         const clickTimer = setTimeout(async () => {
           if (!responseReceived) {
-            console.log("[PAYMENT_PW] No response after 800ms, clicking search button...");
+            console.log("[PAYMENT_PW] No response after 1s, clicking search button...");
             try {
               await page.click(".search-button a.right-button", { timeout: 5000 });
-            } catch (e) {
-              // Ignorar error si no existe el selector
-            }
+            } catch (e) {}
           }
-        }, 800);
+        }, 1000);
 
         try {
-          // Esperar la response
           const response = await waitForResponsePromise;
           responseReceived = true;
           clearTimeout(clickTimer);
 
           const responseJson: PaymentWebResponse = await response.json();
-          console.log(`[PAYMENT_PW] got response Success=${responseJson.Success}, Message=${responseJson.Message}`);
-
-          // Limpiar input después de éxito para el siguiente job
-          try {
-            await page.click("#inputGuide");
-            await page.keyboard.down("Control");
-            await page.keyboard.press("A");
-            await page.keyboard.up("Control");
-            await page.keyboard.press("Backspace");
-            console.log("[PAYMENT_PW] Input cleared for next request");
-          } catch (cleanupError) {
-            console.log("[PAYMENT_PW] Warning: Could not clear input:", cleanupError);
-          }
+          console.log(`[PAYMENT_PW] Got response Success=${responseJson.Success}`);
 
           return responseJson;
         } catch (error) {
@@ -165,44 +149,25 @@ class PaymentWebSingleton {
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        
-        // Si es timeout y no es el último intento, hacer reload y reintentar
-        if (errorMsg.includes("Timeout") && attemptNum === 1) {
-          console.log(`[PAYMENT_PW] retry due to slow connection (attempt ${attemptNum}/2)`);
-          try {
-            console.log("[PAYMENT_PW] Reloading page...");
-            await page.reload({ waitUntil: "domcontentloaded" });
-            return attemptFetch(2);
-          } catch (reloadError) {
-            console.error("[PAYMENT_PW] Error during reload/retry:", reloadError);
-            throw new Error("Timeout waiting for ObtenerRastreoGuiasClientePost (after retry)");
-          }
+        console.log(`[PAYMENT_PW] Attempt ${attemptNum} failed: ${errorMsg}`);
+
+        if (attemptNum === 1) {
+          console.log("[PAYMENT_PW] Retrying fetch...");
+          await page.reload({ waitUntil: "domcontentloaded" });
+          return attemptFetch(2);
         }
 
-        // Si es el segundo intento o no es timeout, tomar screenshot y fallar
-        if (error instanceof Error && error.message.includes("Timeout")) {
-          console.log("[PAYMENT_PW] Timeout waiting for ObtenerRastreoGuiasClientePost");
-          try {
-            await page.screenshot({ path: "payment-timeout.png", fullPage: true });
-            console.log("[PAYMENT_PW] Screenshot saved to payment-timeout.png");
-            const pageContent = await page.content();
-            console.log("[PAYMENT_PW] Page HTML:", pageContent.substring(0, 1000));
-          } catch (debugError) {
-            console.error("[PAYMENT_PW] Error capturing debug info:", debugError);
-          }
-        }
+        // Debug info on final failure
+        try {
+          await page.screenshot({ path: "payment-fail.png", fullPage: true });
+          console.log("[PAYMENT_PW] Failure screenshot saved to payment-fail.png");
+        } catch {}
 
         throw error;
       }
     };
 
-    try {
-      return await attemptFetch(1);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[PAYMENT_PW] Error fetching ${trackingNumber}:`, errorMsg);
-      throw error;
-    }
+    return await attemptFetch(1);
   }
 
   async close(): Promise<void> {
@@ -220,8 +185,6 @@ class PaymentWebSingleton {
   }
 }
 
-// Singleton instance
 const paymentWeb = new PaymentWebSingleton();
-
 export default paymentWeb;
 export type { PaymentWebResponse };
