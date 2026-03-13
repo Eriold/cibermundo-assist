@@ -170,25 +170,33 @@ class ApxClientSingleton {
       });
     }
 
-    console.log("[APX] Clicking login...");
-    await this.loginPage.click("#botonLogin");
-    
-    // Esperar a que cargue la página post-login (puede ser muy lento)
-    console.log("[APX] Waiting for authentication to complete (up to 60s)...");
+    // Si el botón está habilitado, hacer click normal
     try {
-      // Esperar por el texto de bienvenida que confirma el login exitoso
-      await this.loginPage.waitForSelector('text="BIENVENIDO"', { timeout: 60000 });
+      await this.loginPage.click("#botonLogin", { timeout: 2000 });
+    } catch {
+      // Ya se hizo submit via JS o está en proceso
+    }
+
+    // Esperar a que cargue la página post-login (puede ser muy lento)
+    console.log("[APX] Waiting for authentication to complete...");
+    
+    try {
+      // Intentar detectar si ya estamos en la página de aplicaciones
+      await Promise.race([
+        this.loginPage.waitForSelector('text="BIENVENIDO"', { timeout: 60000 }),
+        this.loginPage.waitForURL("**/home/aplicaciones", { timeout: 60000 })
+      ]);
       console.log("[APX] Login successful, dashboard reached.");
     } catch (err) {
-      console.log("[APX] Warning: Welcome text not found within 60s, checking URL...");
+      console.log("[APX] Warning: Success indicator not found within 60s, checking current URL...");
       if (this.loginPage.url().includes("/home/aplicaciones")) {
         console.log("[APX] URL confirms we are in the dashboard.");
       } else {
-        console.error("[APX] Login might have failed or is extremely slow.");
+        console.warn("[APX] Login might have failed or is extremely slow. URL:", this.loginPage.url());
       }
     }
 
-    await this.loginPage.waitForTimeout(2000); // Darle un poco más de aire
+    await this.loginPage.waitForTimeout(1000);
 
     // Debug: capturar screenshot y HTML para diagnosticar
     try {
@@ -330,20 +338,31 @@ class ApxClientSingleton {
       }
 
       // ─── Scrape Destinatario ──────────────────────────────
-
+      // Esperar un poco a que los campos se llenen tras el clic de búsqueda
+      console.log("[APX] Scraping recipient info...");
+      
       let recipientName: string | undefined;
       let recipientPhone: string | undefined;
 
       try {
-        recipientName = await page.inputValue("#tbxNombreDes").catch(() => undefined);
-        recipientPhone = await page.inputValue("#tbxTelefonoDes").catch(() => undefined);
-      } catch {
-        console.log("[APX] Could not scrape recipient info (may be empty)");
+        // Esperar a que el campo de nombre tenga algún valor (no esté vacío)
+        await page.waitForFunction(() => {
+          const el = document.querySelector("#tbxNombreDes") as HTMLInputElement;
+          return el && el.value && el.value.trim().length > 0;
+        }, { timeout: 5000 }).catch(() => console.log("[APX] Timeout waiting for recipient name value"));
+
+        // Obtener valores usando getAttribute o property value
+        recipientName = await page.$eval("#tbxNombreDes", (el: any) => el.value).catch(() => undefined);
+        recipientPhone = await page.$eval("#tbxTelefonoDes", (el: any) => el.value).catch(() => undefined);
+      } catch (err) {
+        console.log("[APX] Error scraping recipient info:", (err as any).message);
       }
 
-      // Limpiar valores vacíos
-      if (recipientName !== undefined) recipientName = recipientName.trim() || undefined;
-      if (recipientPhone !== undefined) recipientPhone = recipientPhone.trim() || undefined;
+      // Limpiar valores
+      recipientName = recipientName ? recipientName.trim() : undefined;
+      recipientPhone = recipientPhone ? recipientPhone.trim() : undefined;
+      
+      if (recipientName) console.log(`[APX] Found recipient: ${recipientName}`);
 
       // ─── Scrape Flujo Guía ────────────────────────────────
 
