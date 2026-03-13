@@ -112,49 +112,62 @@ class ApxClientSingleton {
 
     // Esperar que Angular renderice el formulario completamente
     await this.loginPage.waitForSelector("#usernameLogin", { timeout: 20000 });
-    await this.loginPage.waitForTimeout(1000); // Angular bootstrap extra
+    await this.loginPage.waitForTimeout(2000); // Angular bootstrap 
 
-    // Llenar usuario — click + limpiar + escribir carácter a carácter
-    await this.loginPage.click("#usernameLogin");
-    await this.loginPage.fill("#usernameLogin", ""); // limpiar
-    await this.loginPage.type("#usernameLogin", this.user, { delay: 50 });
-    // Despachar evento input para Angular reactive form
-    await this.loginPage.$eval("#usernameLogin", (el: any) => {
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    // Usar setter nativo de HTMLInputElement para que Angular detecte los cambios
+    await this.loginPage.evaluate((creds) => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, "value"
+      )!.set!;
 
-    // Llenar contraseña
-    await this.loginPage.click("#passwordLogin");
-    await this.loginPage.fill("#passwordLogin", ""); // limpiar
-    await this.loginPage.type("#passwordLogin", this.pass, { delay: 50 });
-    await this.loginPage.$eval("#passwordLogin", (el: any) => {
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+      const userInput = document.querySelector("#usernameLogin") as HTMLInputElement;
+      const passInput = document.querySelector("#passwordLogin") as HTMLInputElement;
 
-    console.log("[APX] Credentials filled, waiting for button to enable...");
+      // Setear valor usando el setter nativo (Angular intercepta esto)
+      nativeSetter.call(userInput, creds.user);
+      userInput.dispatchEvent(new Event("input", { bubbles: true }));
+      userInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      nativeSetter.call(passInput, creds.pass);
+      passInput.dispatchEvent(new Event("input", { bubbles: true }));
+      passInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }, { user: this.user, pass: this.pass });
+
+    console.log("[APX] Credentials set via native setter, waiting for button...");
 
     // Esperar que Angular habilite el botón
     try {
       await this.loginPage.waitForSelector("#botonLogin:not([disabled])", { timeout: 5000 });
+      console.log("[APX] Button enabled naturally");
     } catch {
-      // Si Angular no habilitó el botón, forzar con JS
-      console.log("[APX] Button still disabled, force-enabling...");
-      await this.loginPage.$eval("#botonLogin", (el: any) => {
-        el.removeAttribute("disabled");
+      // Último recurso: submit el formulario directamente, no el botón
+      console.log("[APX] Button still disabled, submitting form via JS...");
+      await this.loginPage.evaluate(() => {
+        const form = document.querySelector("form");
+        if (form) {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
+        // También intentar click forzado
+        const btn = document.querySelector("#botonLogin") as HTMLButtonElement;
+        if (btn) {
+          btn.disabled = false;
+          btn.click();
+        }
       });
-      await this.loginPage.waitForTimeout(300);
     }
 
-    console.log("[APX] Clicking login...");
-    await this.loginPage.click("#botonLogin");
+    // Si el botón está habilitado, hacer click normal
+    try {
+      await this.loginPage.click("#botonLogin", { timeout: 2000 });
+    } catch {
+      // Ya se hizo submit via JS arriba
+    }
     
-    // Esperar a que cargue la página post-login (el menú principal)
+    // Esperar a que cargue la página post-login
     await this.loginPage.waitForLoadState("networkidle").catch(() => {
       console.log("[APX] Post-login networkidle timeout, continuing...");
     });
-    await this.loginPage.waitForTimeout(2000); // Esperar renderizado
+    await this.loginPage.waitForTimeout(2000);
 
     console.log("[APX] Post-login URL:", this.loginPage.url());
     this.isLoggedIn = true;
