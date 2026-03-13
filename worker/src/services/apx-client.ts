@@ -207,30 +207,45 @@ class ApxClientSingleton {
       await this.login();
     }
 
-    console.log("[APX] Navigating to Explorador Envíos...");
+    const explorerUrl = "http://reportes.interrapidisimo.com/Reportes/ExploradorEnvios/ExploradorEnvios.aspx";
+    console.log(`[APX] Navigating directly to Explorador Envíos: ${explorerUrl}`);
 
-    // Buscar y hacer clic en el enlace de Explorador Envíos
-    // El HTML muestra un <p> con el texto "Explorador Envios"
-    console.log("[APX] Waiting for menu card...");
-    await this.loginPage!.waitForSelector('text="Explorador Envios"', { timeout: 15000 });
-    
-    console.log("[APX] Clicking Explorador Envíos card (opens new tab)...");
+    try {
+      // Intentar navegar directamente en lugar de hacer clic en la pestaña
+      // Esto suele funcionar si la sesión se comparte o se auto-valida
+      await this.loginPage!.goto(explorerUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      
+      this.explorerPage = this.loginPage; // Reutilizamos la misma página para simplificar
+      
+      // Esperar a que cargue el selector clave
+      await this.explorerPage!.waitForSelector("#tbxNumeroGuia", { timeout: 15000 });
+      
+      console.log("[APX] Explorer page ready via direct navigation");
+      this.isOnExplorerPage = true;
+    } catch (error) {
+      console.log("[APX] Direct navigation failed or timed out, trying click fallback...");
+      
+      // Fallback: Si el salto directo no funciona, intentar el clic original
+      try {
+        await this.loginPage!.goto(this.loginUrl.replace("/auth/login", "/home/aplicaciones"), { waitUntil: "domcontentloaded" });
+        await this.loginPage!.waitForSelector('text="Explorador Envios"', { timeout: 15000 });
+        
+        const [newPage] = await Promise.all([
+          this.context!.waitForEvent("page", { timeout: 20000 }),
+          this.loginPage!.click('text="Explorador Envios"'),
+        ]);
 
-    // Esto abre una NUEVA PESTAÑA, así que capturamos el evento 'page'
-    const [newPage] = await Promise.all([
-      this.context!.waitForEvent("page", { timeout: 20000 }),
-      this.loginPage!.click('text="Explorador Envios"'),
-    ]);
-
-    this.explorerPage = newPage;
-    this.explorerPage.setDefaultTimeout(20000);
-    this.explorerPage.setDefaultNavigationTimeout(40000);
-
-    await this.explorerPage.waitForLoadState("domcontentloaded");
-    await this.explorerPage.waitForSelector("#tbxNumeroGuia", { timeout: 15000 });
-
-    console.log("[APX] Explorer page ready:", this.explorerPage.url());
-    this.isOnExplorerPage = true;
+        this.explorerPage = newPage;
+        await this.explorerPage.waitForLoadState("domcontentloaded");
+        await this.explorerPage.waitForSelector("#tbxNumeroGuia", { timeout: 15000 });
+        
+        console.log("[APX] Explorer page ready via click fallback");
+        this.isOnExplorerPage = true;
+      } catch (fallbackError) {
+        console.error("[APX] Both direct navigation and click fallback failed:", fallbackError);
+        throw fallbackError;
+      }
+    }
   }
 
   // ─── Verificar si la sesión sigue activa ──────────────────
