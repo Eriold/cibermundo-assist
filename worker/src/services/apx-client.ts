@@ -207,24 +207,42 @@ class ApxClientSingleton {
       await this.login();
     }
 
-    const explorerUrl = "http://reportes.interrapidisimo.com/Reportes/ExploradorEnvios/ExploradorEnvios.aspx";
-    console.log(`[APX] Opening Explorador Envíos in NEW TAB: ${explorerUrl}`);
+    console.log("[APX] Navigating to Explorador Envíos via dashboard click...");
 
     try {
-      // Abrir una NUEVA PESTAÑA en el mismo contexto para compartir la sesión
-      this.explorerPage = await this.context!.newPage();
+      // Selector específico basado en el HTML proporcionado por el usuario
+      const cardSelector = 'div.bs-tarjetas[title="Explorador Envios"]';
+      
+      console.log("[APX] Waiting for Explorador Envíos card...");
+      await this.loginPage!.waitForSelector(cardSelector, { timeout: 30000 });
+
+      console.log("[APX] Clicking card to open NEW TAB...");
+
+      // Capturar la nueva pestaña que se abre al hacer clic
+      const [newPage] = await Promise.all([
+        this.context!.waitForEvent("page", { timeout: 30000 }),
+        this.loginPage!.click(cardSelector),
+      ]);
+
+      this.explorerPage = newPage;
       this.explorerPage.setDefaultTimeout(30000);
       this.explorerPage.setDefaultNavigationTimeout(60000);
 
-      await this.explorerPage.goto(explorerUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+      console.log("[APX] New tab opened, waiting for search input...");
       
-      // Esperar a que cargue el selector clave en el Explorador
-      await this.explorerPage.waitForSelector("#tbxNumeroGuia", { timeout: 20000 });
+      // Esperar a que cargue el selector clave en el Explorador (la pestaña nueva)
+      await this.explorerPage.waitForSelector("#tbxNumeroGuia", { timeout: 30000 });
       
-      console.log("[APX] Explorer page (new tab) ready via direct navigation");
+      console.log("[APX] Explorer page (new tab) ready via click strategy");
       this.isOnExplorerPage = true;
     } catch (error) {
-      console.log("[APX] Direct tab opening failed, error:", (error as any).message);
+      console.error("[APX] Click-based navigation failed:", (error as any).message);
+      
+      // Tomar screenshot para ver por qué falló el clic
+      try {
+        await this.loginPage!.screenshot({ path: "apx-click-fail.png" });
+      } catch {}
+      
       throw error;
     }
   }
