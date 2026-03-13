@@ -120,31 +120,23 @@ class PaymentWebSingleton {
           { timeout: 30000 }
         );
 
-        // Disparar búsqueda con ENTER
-        await page.keyboard.press("Enter");
-
-        // Fallback: si ENTER no funciona, intentar clic en el botón de búsqueda
-        let responseReceived = false;
-        const clickTimer = setTimeout(async () => {
-          if (!responseReceived) {
-            console.log("[PAYMENT_PW] No response after 1s, clicking search button...");
-            try {
-              await page.click(".search-button a.right-button", { timeout: 5000 });
-            } catch (e) {}
-          }
-        }, 1000);
+        // Disparar búsqueda: Clic en el botón o Enter
+        console.log("[PAYMENT_PW] Clicking #btnRastrear to search...");
+        try {
+          // Intentar clic directo primero, es más fiable que Enter en red lenta
+          await page.click("#btnRastrear", { timeout: 5000 });
+        } catch (e) {
+          console.log("[PAYMENT_PW] Click failed, trying Enter press...");
+          await page.keyboard.press("Enter");
+        }
 
         try {
           const response = await waitForResponsePromise;
-          responseReceived = true;
-          clearTimeout(clickTimer);
-
           const responseJson: PaymentWebResponse = await response.json();
           console.log(`[PAYMENT_PW] Got response Success=${responseJson.Success}`);
 
           return responseJson;
         } catch (error) {
-          clearTimeout(clickTimer);
           throw error;
         }
       } catch (error) {
