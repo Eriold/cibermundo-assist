@@ -106,27 +106,54 @@ class ApxClientSingleton {
     this.loginPage.setDefaultTimeout(20000);
     this.loginPage.setDefaultNavigationTimeout(40000);
 
-    // Navegar al login
-    await this.loginPage.goto(this.loginUrl, { waitUntil: "domcontentloaded" });
+    // Navegar al login — networkidle para que Angular termine de inicializar
+    await this.loginPage.goto(this.loginUrl, { waitUntil: "networkidle" });
     console.log("[APX] Login page loaded:", this.loginPage.url());
 
-    // Llenar credenciales con type() — Angular reactive forms necesitan eventos reales de teclado
-    await this.loginPage.waitForSelector("#usernameLogin", { timeout: 15000 });
+    // Esperar que Angular renderice el formulario completamente
+    await this.loginPage.waitForSelector("#usernameLogin", { timeout: 20000 });
+    await this.loginPage.waitForTimeout(1000); // Angular bootstrap extra
+
+    // Llenar usuario — click + limpiar + escribir carácter a carácter
     await this.loginPage.click("#usernameLogin");
-    await this.loginPage.type("#usernameLogin", this.user, { delay: 30 });
+    await this.loginPage.fill("#usernameLogin", ""); // limpiar
+    await this.loginPage.type("#usernameLogin", this.user, { delay: 50 });
+    // Despachar evento input para Angular reactive form
+    await this.loginPage.$eval("#usernameLogin", (el: any) => {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
+    // Llenar contraseña
     await this.loginPage.click("#passwordLogin");
-    await this.loginPage.type("#passwordLogin", this.pass, { delay: 30 });
+    await this.loginPage.fill("#passwordLogin", ""); // limpiar
+    await this.loginPage.type("#passwordLogin", this.pass, { delay: 50 });
+    await this.loginPage.$eval("#passwordLogin", (el: any) => {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
-    // Esperar que Angular habilite el botón (ya no estará disabled)
-    await this.loginPage.waitForSelector("#botonLogin:not([disabled])", { timeout: 10000 });
-    console.log("[APX] Login button enabled, clicking...");
+    console.log("[APX] Credentials filled, waiting for button to enable...");
 
-    // Click en botón login
+    // Esperar que Angular habilite el botón
+    try {
+      await this.loginPage.waitForSelector("#botonLogin:not([disabled])", { timeout: 5000 });
+    } catch {
+      // Si Angular no habilitó el botón, forzar con JS
+      console.log("[APX] Button still disabled, force-enabling...");
+      await this.loginPage.$eval("#botonLogin", (el: any) => {
+        el.removeAttribute("disabled");
+      });
+      await this.loginPage.waitForTimeout(300);
+    }
+
+    console.log("[APX] Clicking login...");
     await this.loginPage.click("#botonLogin");
     
     // Esperar a que cargue la página post-login (el menú principal)
-    await this.loginPage.waitForLoadState("domcontentloaded");
+    await this.loginPage.waitForLoadState("networkidle").catch(() => {
+      console.log("[APX] Post-login networkidle timeout, continuing...");
+    });
     await this.loginPage.waitForTimeout(2000); // Esperar renderizado
 
     console.log("[APX] Post-login URL:", this.loginPage.url());
