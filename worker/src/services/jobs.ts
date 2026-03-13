@@ -1,6 +1,6 @@
 import { run, get, all, saveDbImmediate } from "../db/index.js";
 import { fetchPaymentInfo } from "./payment-api.js";
-import { fetchApxData } from "./apx-client.js";
+import apxClient from "./apx-client.js";
 import paymentWeb, { type PaymentWebResponse } from "./paymentWeb.js";
 
 export interface Job {
@@ -474,7 +474,7 @@ export function markShipmentAnomaly(trackingNumber: string, message: string): vo
 }
 
 /**
- * Procesar job FETCH_PORTAL_APX
+ * Procesar job FETCH_PORTAL_APX — usa scraper real Playwright
  */
 export async function processFetchPortalApx(job: Job): Promise<void> {
   const { id, tracking_number } = job;
@@ -490,47 +490,84 @@ export async function processFetchPortalApx(job: Job): Promise<void> {
       throw new Error(`Shipment not found: ${tracking_number}`);
     }
 
-    // Fetch desde APX
-    const result = await fetchApxData(tracking_number);
+    // Fetch desde APX (scraper real con Playwright)
+    const result = await apxClient.fetchGuideData(tracking_number);
 
     if (!result.success) {
-      // Si requiere intervención humana, marcar como NEEDS_HUMAN
       if (result.needsHuman) {
         markJobNeedsHuman(id, result.error || "Requires human review");
         console.log(`👤 FETCH_PORTAL_APX needs human: ${tracking_number} - ${result.error}`);
       } else {
-        // Error normal, reintentar
         throw new Error(result.error || "Unknown APX error");
       }
       return;
     }
 
-    // Procesar respuesta y actualizar shipment
     const { data } = result;
+    if (!data) {
+      throw new Error("APX returned success but no data");
+    }
+
     const now = new Date().toISOString();
 
+    // 1. Actualizar shipment con datos del destinatario + gestion_count
     run(
       `UPDATE shipments SET 
-        recipient_name = ?,
-        recipient_phone = ?,
-        recipient_id = ?,
+        recipient_name = COALESCE(?, recipient_name),
+        recipient_phone = COALESCE(?, recipient_phone),
+        gestion_count = ?,
         apx_last_fetch_at = ?,
         updated_at = ?
        WHERE tracking_number = ?`,
       [
-        data?.recipient_name || null,
-        data?.recipient_phone || null,
-        data?.recipient_id || null,
+        data.recipient_name || null,
+        data.recipient_phone || null,
+        data.gestion_count,
         now,
         now,
         tracking_number,
       ] as any
     );
 
-    // Marcar job como DONE
+    // 2. Borrar registros anteriores de shipment_tracking para esta guía
+    run(
+      `DELETE FROM shipment_tracking WHERE tracking_number = ?`,
+      [tracking_number] as any
+    );
+
+    // 3. Insertar filas nuevas del Flujo Guía
+    for (const row of data.tracking_flow) {
+      run(
+        `INSERT INTO shipment_tracking (
+          tracking_number, ciudad, descripcion_estado, fecha_cambio_estado,
+          bodega, motivo, mensajero, numero_tipo_impreso,
+          descripcion_tipo_impreso, usuario, observacion,
+          has_location_icon, fetched_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tracking_number,
+          row.ciudad,
+          row.descripcion_estado,
+          row.fecha_cambio_estado,
+          row.bodega,
+          row.motivo,
+          row.mensajero,
+          row.numero_tipo_impreso,
+          row.descripcion_tipo_impreso,
+          row.usuario,
+          row.observacion,
+          row.has_location_icon ? 1 : 0,
+          now,
+        ] as any
+      );
+    }
+
+    saveDbImmediate();
+
+    // 4. Marcar job como DONE
     markJobDone(id);
 
-    console.log(`✓ FETCH_PORTAL_APX success: ${tracking_number}`);
+    console.log(`✓ FETCH_PORTAL_APX success: ${tracking_number} (${data.tracking_flow.length} rows, ${data.gestion_count} gestiones)`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     markJobFailed(id, errorMsg, job.attempts, job.max_attempts);

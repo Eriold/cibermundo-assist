@@ -237,6 +237,116 @@ router.get("/export", (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+// ─── GESTIÓN TRACKING ROUTES ──────────────────────────────────
+
+// POST /load-gestiones - Crear jobs FETCH_PORTAL_APX para paquetes abiertos no actualizados hoy
+router.post("/load-gestiones", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0]; // YYYY-MM-DD
+    const now = new Date().toISOString();
+
+    // Obtener paquetes abiertos (status_id != 2 o NULL) que NO fueron actualizados hoy
+    const openShipments = all<{ tracking_number: string }>(
+      `SELECT s.tracking_number 
+       FROM shipments s
+       LEFT JOIN statuses st ON s.status_id = st.id
+       WHERE (st.name != 'Cerrado' OR s.status_id IS NULL)
+         AND (s.apx_last_fetch_at IS NULL OR s.apx_last_fetch_at < :today)`,
+      { ":today": todayStr }
+    );
+
+    let createdCount = 0;
+    for (const ship of openShipments) {
+      // Verificar que no hay un job ya PENDING para esta guía
+      const existingJob = get<{ id: number }>(
+        `SELECT id FROM jobs 
+         WHERE tracking_number = :tn 
+           AND type = 'FETCH_PORTAL_APX'
+           AND status IN ('PENDING', 'RUNNING')
+         LIMIT 1`,
+        { ":tn": ship.tracking_number }
+      );
+
+      if (!existingJob) {
+        run(
+          `INSERT INTO jobs (type, tracking_number, status, attempts, max_attempts, run_after, created_at, updated_at)
+           VALUES ('FETCH_PORTAL_APX', :tn, 'PENDING', 0, 3, :now, :now, :now)`,
+          { ":tn": ship.tracking_number, ":now": now }
+        );
+        createdCount++;
+      }
+    }
+
+    res.json({
+      ok: true,
+      message: `Se crearon ${createdCount} jobs de gestión para ${openShipments.length} paquetes abiertos.`,
+      total_open: openShipments.length,
+      jobs_created: createdCount,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /gestion-summary - Retorna conteo agrupado por gestion_count
+router.get("/gestion-summary", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Solo paquetes abiertos (no cerrados)
+    const rows = all<{ gestion_count: number; count: number }>(
+      `SELECT COALESCE(s.gestion_count, 0) as gestion_count, COUNT(*) as count
+       FROM shipments s
+       LEFT JOIN statuses st ON s.status_id = st.id
+       WHERE (st.name != 'Cerrado' OR s.status_id IS NULL)
+       GROUP BY COALESCE(s.gestion_count, 0)
+       ORDER BY gestion_count ASC`
+    );
+
+    const summary: Record<string, number> = {
+      gestion_0: 0,
+      gestion_1: 0,
+      gestion_2: 0,
+      gestion_3: 0,
+    };
+
+    for (const row of rows) {
+      const key = `gestion_${Math.min(row.gestion_count, 3)}`;
+      summary[key] = (summary[key] || 0) + row.count;
+    }
+
+    res.json(summary);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /:trackingNumber/tracking - Retorna historial Flujo Guía
+router.get("/:trackingNumber/tracking", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { trackingNumber } = req.params;
+    const rows = all(
+      `SELECT * FROM shipment_tracking 
+       WHERE tracking_number = :tn 
+       ORDER BY id ASC`,
+      { ":tn": trackingNumber }
+    );
+
+    // Obtener la última fecha de actualización
+    const shipment = get<{ apx_last_fetch_at: string | null }>(
+      `SELECT apx_last_fetch_at FROM shipments WHERE tracking_number = :tn`,
+      { ":tn": trackingNumber }
+    );
+
+    res.json({
+      tracking_number: trackingNumber,
+      last_updated: shipment?.apx_last_fetch_at || null,
+      flow: rows,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // PATCH /:trackingNumber - Actualizar número de guía y/o Detalles (Fase 7)
 router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -315,7 +425,7 @@ router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunctio
   }
 });
 
-// DELETE /:trackingNumber - Eliminar guía (y sus jobs)
+// DELETE /:trackingNumber - Eliminar guía (y sus jobs + tracking)
 router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { trackingNumber } = req.params;
@@ -325,6 +435,7 @@ router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFuncti
       return res.status(404).json({ error: "Guía no encontrada" });
     }
 
+    run("DELETE FROM shipment_tracking WHERE tracking_number = :t", { ":t": trackingNumber });
     run("DELETE FROM shipments WHERE tracking_number = :t", { ":t": trackingNumber });
     run("DELETE FROM jobs WHERE tracking_number = :t", { ":t": trackingNumber });
 

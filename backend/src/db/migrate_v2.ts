@@ -77,6 +77,36 @@ async function runMigration() {
     checkAndAddColumn('shipments_archive', existingArchiveCols, 'checkout_by', 'INTEGER');
     checkAndAddColumn('shipments_archive', existingArchiveCols, 'message_sent', 'INTEGER DEFAULT 0');
 
+    // Fase 8: Gestión Tracking
+    checkAndAddColumn('shipments', existingShipmentCols, 'gestion_count', 'INTEGER DEFAULT 0');
+    checkAndAddColumn('shipments_archive', existingArchiveCols, 'gestion_count', 'INTEGER DEFAULT 0');
+
+    // Crear tabla shipment_tracking para historial del Flujo Guía (APX)
+    run(`
+      CREATE TABLE IF NOT EXISTS shipment_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tracking_number TEXT NOT NULL,
+        ciudad TEXT,
+        descripcion_estado TEXT,
+        fecha_cambio_estado TEXT,
+        bodega TEXT,
+        motivo TEXT,
+        mensajero TEXT,
+        numero_tipo_impreso TEXT,
+        descripcion_tipo_impreso TEXT,
+        usuario TEXT,
+        observacion TEXT,
+        has_location_icon INTEGER DEFAULT 0,
+        fetched_at TEXT NOT NULL,
+        FOREIGN KEY (tracking_number) REFERENCES shipments(tracking_number)
+      )
+    `);
+    run(`
+      CREATE INDEX IF NOT EXISTS idx_shipment_tracking_tn
+      ON shipment_tracking(tracking_number)
+    `);
+    console.log("✓ Tabla shipment_tracking y columna gestion_count listas.");
+
     console.log("=== MIGRACIÓN COMPLETADA EXITOSAMENTE ===");
 
   } catch (err) {

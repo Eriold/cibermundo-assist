@@ -2,8 +2,10 @@ import "dotenv/config";
 import fs from "node:fs";
 import { initDb, getDbPath } from "./db/index.js";
 import { checkInternet } from "./services/internet.js";
-import { getJobStats, processOnePaymentJob } from "./services/jobs.js";
+import { getJobStats, processOnePaymentJob, processFetchPortalApx } from "./services/jobs.js";
 import paymentWeb from "./services/paymentWeb.js";
+import apxClient from "./services/apx-client.js";
+import { get } from "./db/index.js";
 
 const POLL_INTERVAL = parseInt(process.env.WORKER_POLL_MS || process.env.POLL_INTERVAL || "5000", 10);
 const INTERNET_CHECK_INTERVAL = parseInt(process.env.INTERNET_CHECK_INTERVAL || "30000", 10);
@@ -100,11 +102,38 @@ async function processPendingJobs(): Promise<void> {
       console.log(`⏳ Delaying ${Math.round(delay)}ms before next payment web request...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
+
+    // Procesar 1 job FETCH_PORTAL_APX (si hay)
+    await processOneApxJob();
   } catch (error) {
     console.error("💥 Error in processPendingJobs:", error);
   } finally {
     isProcessing = false;
   }
+}
+
+/**
+ * Procesar un job FETCH_PORTAL_APX pendiente
+ */
+async function processOneApxJob(): Promise<void> {
+  const now = new Date().toISOString();
+  const job = get<any>(
+    `SELECT * FROM jobs
+     WHERE status = 'PENDING'
+       AND type = 'FETCH_PORTAL_APX'
+       AND (run_after IS NULL OR run_after <= ?)
+     ORDER BY id ASC
+     LIMIT 1`,
+    [now] as any
+  );
+
+  if (!job) return;
+
+  console.log(`[WORKER] Processing APX job id=${job.id} guide=${job.tracking_number}`);
+  await processFetchPortalApx(job);
+  
+  // Espera configurable entre scrapes de APX
+  await apxClient.waitBetweenScrapes();
 }
 
 async function main(): Promise<void> {
@@ -152,7 +181,8 @@ async function main(): Promise<void> {
     process.on("SIGINT", async () => {
       console.log("\n\n⚠️ Shutting down gracefully...");
       await paymentWeb.close();
-      console.log("✓ Playwright browser closed");
+      await apxClient.close();
+      console.log("✓ Playwright browsers closed");
       process.exit(0);
     });
   } catch (error) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getShipments, deleteShipment, getStatuses, getManagements, updateShipmentTracking } from '../../services/api';
+import { getShipments, deleteShipment, getStatuses, getManagements, updateShipmentTracking, loadGestiones, getGestionSummary, getTrackingHistory } from '../../services/api';
 import { getSession } from '../../services/auth';
 
 type TabMode = 'open' | 'closed';
@@ -28,6 +28,7 @@ interface Shipment {
   checkout_date?: string;
   checkout_by?: string;
   message_sent?: number;
+  gestion_count?: number;
 }
 
 interface CatalogItem {
@@ -72,6 +73,14 @@ const ShipmentsTab: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [shipmentToDelete, setShipmentToDelete] = useState<Shipment | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Gestión tracking state
+  const [gestionSummary, setGestionSummary] = useState<Record<string, number>>({ gestion_0: 0, gestion_1: 0, gestion_2: 0, gestion_3: 0 });
+  const [loadingGestiones, setLoadingGestiones] = useState(false);
+  const [gestionFilter, setGestionFilter] = useState<number | null>(null);
+  const [trackingHistory, setTrackingHistory] = useState<any[]>([]);
+  const [trackingLastUpdated, setTrackingLastUpdated] = useState<string | null>(null);
+  const [loadingTracking, setLoadingTracking] = useState(false);
 
   const fetchCatalogs = async () => {
     try {
@@ -174,6 +183,7 @@ const ShipmentsTab: React.FC = () => {
   useEffect(() => {
     fetchCatalogs();
     fetchShipments(false, 1, '', filters);
+    fetchGestionSummary();
   }, []);
 
   // Poll interval effect
@@ -213,6 +223,61 @@ const ShipmentsTab: React.FC = () => {
     return `${day}/${month}/${year} ${strHours}:${minutes}${ampm}`;
   };
 
+  // ─── Gestión Tracking Functions ─────────────────────────────
+
+  const fetchGestionSummary = async () => {
+    try {
+      const data = await getGestionSummary();
+      setGestionSummary(data);
+    } catch (e) {
+      console.error('Error fetching gestion summary', e);
+    }
+  };
+
+  const handleLoadGestiones = async () => {
+    setLoadingGestiones(true);
+    try {
+      const result = await loadGestiones();
+      alert(`${result.message}`);
+      // Recargar datos y resumen
+      fetchShipments(false, page, searchTerm, filters);
+      fetchGestionSummary();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Error al cargar gestiones');
+    } finally {
+      setLoadingGestiones(false);
+    }
+  };
+
+  const fetchTrackingForModal = async (trackingNumber: string) => {
+    setLoadingTracking(true);
+    try {
+      const data = await getTrackingHistory(trackingNumber);
+      setTrackingHistory(data.flow || []);
+      setTrackingLastUpdated(data.last_updated);
+    } catch (e) {
+      console.error('Error fetching tracking history', e);
+      setTrackingHistory([]);
+      setTrackingLastUpdated(null);
+    } finally {
+      setLoadingTracking(false);
+    }
+  };
+
+  const getGestionBadge = (count: number | undefined | null) => {
+    const c = count ?? 0;
+    if (c === 0) return { text: '0', bg: 'bg-gray-100 dark:bg-white/5', text_color: 'text-gray-500 dark:text-gray-400', border: '' };
+    if (c === 1) return { text: '1', bg: 'bg-yellow-100 dark:bg-yellow-500/20', text_color: 'text-yellow-700 dark:text-yellow-400', border: 'border-l-4 border-yellow-400' };
+    if (c === 2) return { text: '2', bg: 'bg-orange-100 dark:bg-orange-500/20', text_color: 'text-orange-700 dark:text-orange-400', border: 'border-l-4 border-orange-400' };
+    return { text: String(c), bg: 'bg-red-100 dark:bg-red-500/20', text_color: 'text-red-700 dark:text-red-400', border: 'border-l-4 border-red-500' };
+  };
+
+  // Override handleOpenEdit to also fetch tracking
+  const handleOpenEditWithTracking = (ship: Shipment) => {
+    handleOpenEdit(ship);
+    fetchTrackingForModal(ship.tracking_number);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Actions Bar */}
@@ -243,6 +308,15 @@ const ShipmentsTab: React.FC = () => {
                 >
                     <span className="material-symbols-outlined text-[18px]">tune</span>
                     Filtros
+                </button>
+                <button 
+                    onClick={handleLoadGestiones}
+                    disabled={loadingGestiones}
+                    className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                    title="Scrapear gestiones de paquetes abiertos"
+                >
+                    <span className={`material-symbols-outlined text-[18px] ${loadingGestiones ? 'animate-spin' : ''}`}>{loadingGestiones ? 'sync' : 'update'}</span>
+                    Cargar Gestiones
                 </button>
                 <button 
                     onClick={() => fetchShipments(false, page, searchTerm, filters)}
@@ -395,6 +469,7 @@ const ShipmentsTab: React.FC = () => {
                     <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Cliente</th>
                     <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Teléfono</th>
                     <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Valor</th>
+                    <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-center">Gestión</th>
                     <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-right">Acciones</th>
                     </tr>
                 </thead>
@@ -430,8 +505,13 @@ const ShipmentsTab: React.FC = () => {
                             );
                         }
 
-                        return filteredShipments.map((ship: any, i: number) => (
-                        <tr key={ship.tracking_number + i} className="hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors">
+                        return filteredShipments.filter((s: any) => {
+                          if (gestionFilter !== null) return (s.gestion_count ?? 0) === gestionFilter;
+                          return true;
+                        }).map((ship: any, i: number) => {
+                        const badge = getGestionBadge(ship.gestion_count);
+                        return (
+                        <tr key={ship.tracking_number + i} className={`hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors ${badge.border}`}>
                             <td className="p-4">
                                 <div className="flex items-center gap-3">
                                     <div className="size-10 rounded-full bg-primary-light/20 text-primary flex items-center justify-center shrink-0">
@@ -470,6 +550,11 @@ const ShipmentsTab: React.FC = () => {
                                     <span className="text-gray-400 italic flex items-center gap-1"><span className="material-symbols-outlined text-[14px] animate-spin">refresh</span> Cargando</span>
                                 )}
                             </td>
+                            <td className="p-4 text-center">
+                                <span className={`inline-flex items-center justify-center size-8 rounded-lg font-black text-sm ${badge.bg} ${badge.text_color}`}>
+                                    {ship.gestion_count ?? 0}
+                                </span>
+                            </td>
                             <td className="p-4 text-sm font-medium">
                                 <div className="flex justify-end gap-2">
                                     <button
@@ -488,7 +573,7 @@ const ShipmentsTab: React.FC = () => {
                                         <span className="material-symbols-outlined text-[18px]">download</span>
                                     </button>
                                     <button
-                                        onClick={() => handleOpenEdit(ship)}
+                                        onClick={() => handleOpenEditWithTracking(ship)}
                                         className="size-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 flex items-center justify-center transition-colors"
                                         title="Editar Guía"
                                     >
@@ -504,7 +589,8 @@ const ShipmentsTab: React.FC = () => {
                                 </div>
                             </td>
                         </tr>
-                        ));
+                        );
+                        });
                     })()}
                 </tbody>
                 <tfoot className="sticky bottom-0 bg-gray-100 dark:bg-[#1f1e16] border-t border-gray-200 dark:border-white/10 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
@@ -515,7 +601,29 @@ const ShipmentsTab: React.FC = () => {
                         <td className="p-4 font-black text-primary text-lg">
                             ${(shipments as any[]).filter((s: any) => activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado').reduce((sum: number, s: any) => sum + (s.amount_total || 0), 0).toLocaleString()}
                         </td>
-                        <td></td>
+                        <td colSpan={2} className="p-4">
+                          <div className="flex items-center gap-2 justify-end">
+                            {[0, 1, 2, 3].map(n => {
+                              const key = `gestion_${n}`;
+                              const count = gestionSummary[key] || 0;
+                              const colors = [
+                                'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
+                                'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
+                                'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+                                'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+                              ];
+                              return (
+                                <button
+                                  key={n}
+                                  onClick={() => setGestionFilter(gestionFilter === n ? null : n)}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-all ${colors[n]} ${gestionFilter === n ? 'ring-2 ring-primary scale-105' : 'hover:scale-105'}`}
+                                >
+                                  G{n}: {count}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
                     </tr>
                 </tfoot>
                 </table>
@@ -662,6 +770,70 @@ const ShipmentsTab: React.FC = () => {
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Flujo Guía Tracking Table */}
+                        <div className="md:col-span-2 mt-2">
+                            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-2 mb-3">
+                                <h4 className="font-bold text-dark-text dark:text-white flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[18px] text-primary">route</span>
+                                    Flujo de la Guía
+                                </h4>
+                                {trackingLastUpdated && (
+                                    <span className="text-xs text-gray-400 font-bold">
+                                        Actualizado: {formatDate(trackingLastUpdated)}
+                                    </span>
+                                )}
+                            </div>
+                            
+                            {loadingTracking ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <span className="material-symbols-outlined animate-spin text-2xl text-gray-400">progress_activity</span>
+                                </div>
+                            ) : trackingHistory.length === 0 ? (
+                                <div className="text-center py-6 text-gray-400">
+                                    <span className="material-symbols-outlined text-3xl mb-1 block opacity-50">info</span>
+                                    <p className="text-sm font-bold">Sin datos de flujo. Presione "Cargar Gestiones" para actualizar.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10">
+                                    <table className="w-full text-left text-xs min-w-[700px]">
+                                        <thead className="bg-gray-50 dark:bg-[#2c2b1f]">
+                                            <tr>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Ciudad</th>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Estado</th>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Fecha</th>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Bodega</th>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Motivo</th>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Mensajero</th>
+                                                <th className="px-3 py-2 font-bold text-gray-500">Observación</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                                            {trackingHistory.map((row: any, idx: number) => {
+                                                const isGestion = row.ciudad?.toUpperCase().includes('URRAO') 
+                                                    && (row.descripcion_estado?.toUpperCase().includes('DEVOLUCIÓN') || row.descripcion_estado?.toUpperCase().includes('DEVOLUCION'));
+                                                return (
+                                                    <tr key={idx} className={isGestion ? 'bg-red-50 dark:bg-red-500/10' : ''}>
+                                                        <td className="px-3 py-2 text-dark-text dark:text-white font-medium">
+                                                            {row.has_location_icon ? <span className="material-symbols-outlined text-[12px] text-primary mr-1 align-middle">location_on</span> : null}
+                                                            {row.ciudad}
+                                                        </td>
+                                                        <td className={`px-3 py-2 ${isGestion ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>
+                                                            {row.descripcion_estado}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{row.fecha_cambio_estado}</td>
+                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.bodega}</td>
+                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.motivo}</td>
+                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.mensajero}</td>
+                                                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400 max-w-[200px] truncate" title={row.observacion}>{row.observacion}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
 
                     </form>

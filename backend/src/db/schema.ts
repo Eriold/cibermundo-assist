@@ -106,7 +106,9 @@ export function initSchema() {
       payment_desc TEXT,
       amount_total INTEGER,
       amount_declared INTEGER,
-      amount_to_collect INTEGER
+      amount_to_collect INTEGER,
+
+      gestion_count INTEGER DEFAULT 0
     )
   `);
 
@@ -148,8 +150,36 @@ export function initSchema() {
       payment_desc TEXT,
       amount_total INTEGER,
       amount_declared INTEGER,
-      amount_to_collect INTEGER
+      amount_to_collect INTEGER,
+
+      gestion_count INTEGER DEFAULT 0
     )
+  `);
+
+  // Tabla para almacenar historial del Flujo Guía (APX portal)
+  run(`
+    CREATE TABLE IF NOT EXISTS shipment_tracking (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tracking_number TEXT NOT NULL,
+      ciudad TEXT,
+      descripcion_estado TEXT,
+      fecha_cambio_estado TEXT,
+      bodega TEXT,
+      motivo TEXT,
+      mensajero TEXT,
+      numero_tipo_impreso TEXT,
+      descripcion_tipo_impreso TEXT,
+      usuario TEXT,
+      observacion TEXT,
+      has_location_icon INTEGER DEFAULT 0,
+      fetched_at TEXT NOT NULL,
+      FOREIGN KEY (tracking_number) REFERENCES shipments(tracking_number)
+    )
+  `);
+
+  run(`
+    CREATE INDEX IF NOT EXISTS idx_shipment_tracking_tn
+    ON shipment_tracking(tracking_number)
   `);
 
   run(`
