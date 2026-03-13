@@ -110,13 +110,17 @@ class ApxClientSingleton {
     await this.loginPage.goto(this.loginUrl, { waitUntil: "domcontentloaded" });
     console.log("[APX] Login page loaded:", this.loginPage.url());
 
-    // Llenar credenciales (Angular: el botón se habilita al llenar ambos campos)
+    // Llenar credenciales con type() — Angular reactive forms necesitan eventos reales de teclado
     await this.loginPage.waitForSelector("#usernameLogin", { timeout: 15000 });
-    await this.loginPage.fill("#usernameLogin", this.user);
-    await this.loginPage.fill("#passwordLogin", this.pass);
+    await this.loginPage.click("#usernameLogin");
+    await this.loginPage.type("#usernameLogin", this.user, { delay: 30 });
 
-    // Esperar que Angular habilite el botón
-    await this.loginPage.waitForTimeout(500);
+    await this.loginPage.click("#passwordLogin");
+    await this.loginPage.type("#passwordLogin", this.pass, { delay: 30 });
+
+    // Esperar que Angular habilite el botón (ya no estará disabled)
+    await this.loginPage.waitForSelector("#botonLogin:not([disabled])", { timeout: 10000 });
+    console.log("[APX] Login button enabled, clicking...");
 
     // Click en botón login
     await this.loginPage.click("#botonLogin");
