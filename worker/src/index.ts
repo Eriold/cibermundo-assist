@@ -31,6 +31,7 @@ const PAYMENT_API_TIMEOUT = parseInt(process.env.PAYMENT_API_TIMEOUT || "10000",
 // Aumentado para conexiones lentas: mínimo 1000ms entre requests
 const PAYMENT_WEB_DELAY_MIN = parseInt(process.env.PAYMENT_WEB_DELAY_MIN || "1500", 10);
 const PAYMENT_WEB_DELAY_MAX = parseInt(process.env.PAYMENT_WEB_DELAY_MAX || "3500", 10);
+const ENABLE_APX_SCRAPER = process.env.ENABLE_APX_SCRAPER === "true";
 
 let isOnline = false;
 let lastInternetCheck = 0;
@@ -118,8 +119,10 @@ async function processPendingJobs(): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    // Procesar 1 job FETCH_PORTAL_APX (si hay)
-    await processOneApxJob();
+    // Procesar 1 job FETCH_PORTAL_APX solo si está habilitado
+    if (ENABLE_APX_SCRAPER) {
+      await processOneApxJob();
+    }
   } catch (error) {
     console.error("💥 Error in processPendingJobs:", error);
   } finally {
@@ -133,11 +136,30 @@ async function processPendingJobs(): Promise<void> {
 async function processOneApxJob(): Promise<void> {
   const now = new Date().toISOString();
   const job = get<any>(
-    `SELECT * FROM jobs
-     WHERE status = 'PENDING'
-       AND type = 'FETCH_PORTAL_APX'
-       AND (run_after IS NULL OR run_after <= ?)
-     ORDER BY id ASC
+    `SELECT j.*
+     FROM jobs j
+     LEFT JOIN shipments s ON s.tracking_number = j.tracking_number
+     WHERE j.status = 'PENDING'
+       AND j.type = 'FETCH_PORTAL_APX'
+       AND (j.run_after IS NULL OR j.run_after <= ?)
+       AND (
+         s.api_last_fetch_at IS NOT NULL
+         OR EXISTS (
+           SELECT 1
+           FROM jobs payment_done
+           WHERE payment_done.tracking_number = j.tracking_number
+             AND payment_done.type = 'FETCH_PAYMENT_API'
+             AND payment_done.status = 'DONE'
+         )
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM jobs payment_active
+         WHERE payment_active.tracking_number = j.tracking_number
+           AND payment_active.type = 'FETCH_PAYMENT_API'
+           AND payment_active.status IN ('PENDING', 'RUNNING', 'WAITING_NET')
+       )
+     ORDER BY j.id ASC
      LIMIT 1`,
     [now] as any
   );
@@ -169,6 +191,7 @@ async function main(): Promise<void> {
     console.log(`  MAX_JOB_ATTEMPTS: ${MAX_JOB_ATTEMPTS}`);
     console.log(`  POLL_INTERVAL: ${POLL_INTERVAL}ms`);
     console.log(`  PAYMENT_WEB_DELAY: ${PAYMENT_WEB_DELAY_MIN}-${PAYMENT_WEB_DELAY_MAX}ms (increased for stability)`);
+    console.log(`  ENABLE_APX_SCRAPER: ${ENABLE_APX_SCRAPER}`);
     console.log(`  Playwright Timeouts: 20s default, 30s navigation`);
     console.log(`  Response Timeout: 20s (with auto-retry on failure)`);
     console.log("=".repeat(60) + "\n");
@@ -180,6 +203,10 @@ async function main(): Promise<void> {
     // Inicializar Playwright
     await paymentWeb.init();
     console.log("✓ Playwright browser initialized (slow network optimized)");
+
+    if (!ENABLE_APX_SCRAPER) {
+      console.log("⚠️ APX scraper disabled via ENABLE_APX_SCRAPER=false");
+    }
 
     // Chequeo inicial de internet
     await checkInternetPeriodically();
