@@ -110,13 +110,16 @@ class ApxClientSingleton {
     await this.loginPage.goto(this.loginUrl, { waitUntil: "domcontentloaded" });
     console.log("[APX] Login page loaded:", this.loginPage.url());
 
-    // Llenar credenciales
-    await this.loginPage.waitForSelector("#UserName", { timeout: 15000 });
-    await this.loginPage.fill("#UserName", this.user);
-    await this.loginPage.fill("#Password", this.pass);
+    // Llenar credenciales (Angular: el botón se habilita al llenar ambos campos)
+    await this.loginPage.waitForSelector("#usernameLogin", { timeout: 15000 });
+    await this.loginPage.fill("#usernameLogin", this.user);
+    await this.loginPage.fill("#passwordLogin", this.pass);
 
-    // Submit
-    await this.loginPage.click('input[type="submit"]');
+    // Esperar que Angular habilite el botón
+    await this.loginPage.waitForTimeout(500);
+
+    // Click en botón login
+    await this.loginPage.click("#botonLogin");
     
     // Esperar a que cargue la página post-login (el menú principal)
     await this.loginPage.waitForLoadState("domcontentloaded");
