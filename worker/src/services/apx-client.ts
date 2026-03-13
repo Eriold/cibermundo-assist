@@ -210,10 +210,16 @@ class ApxClientSingleton {
     console.log("[APX] Navigating to Explorador Envíos...");
 
     // Buscar y hacer clic en el enlace de Explorador Envíos
+    // El HTML muestra un <p> con el texto "Explorador Envios"
+    console.log("[APX] Waiting for menu card...");
+    await this.loginPage!.waitForSelector('text="Explorador Envios"', { timeout: 15000 });
+    
+    console.log("[APX] Clicking Explorador Envíos card (opens new tab)...");
+
     // Esto abre una NUEVA PESTAÑA, así que capturamos el evento 'page'
     const [newPage] = await Promise.all([
-      this.context!.waitForEvent("page", { timeout: 15000 }),
-      this.loginPage!.click('a[href*="ExploradorEnvios"]'),
+      this.context!.waitForEvent("page", { timeout: 20000 }),
+      this.loginPage!.click('text="Explorador Envios"'),
     ]);
 
     this.explorerPage = newPage;
@@ -274,20 +280,29 @@ class ApxClientSingleton {
       await this.ensureSession();
       const page = this.explorerPage!;
 
+      // Debug: ver si la página cargó bien
+      try {
+        await page.screenshot({ path: "apx-explorer-debug.png" });
+        console.log("[APX] Explorer tab screenshot saved to apx-explorer-debug.png");
+      } catch {}
+
       // Limpiar campo y escribir número de guía
       console.log(`[APX] Searching guide: ${trackingNumber}`);
+      await page.waitForSelector("#tbxNumeroGuia", { timeout: 10000 });
       await page.click("#tbxNumeroGuia");
       await page.fill("#tbxNumeroGuia", "");
-      await page.fill("#tbxNumeroGuia", trackingNumber);
+      await page.type("#tbxNumeroGuia", trackingNumber, { delay: 30 });
 
       // Presionar Enter o click en botón
+      console.log("[APX] Clicking search button (#btnShow)...");
       await page.click("#btnShow");
       
       // Esperar a que cargue la respuesta
-      await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {
-        console.log("[APX] networkidle timeout, continuing...");
+      // Nota: A veces estas páginas ASPX no disparan networkidle correctamente
+      await page.waitForLoadState("load", { timeout: 20000 }).catch(() => {
+        console.log("[APX] Load timeout, continuing anyway...");
       });
-      await page.waitForTimeout(2000); // Esperar renderizado completo
+      await page.waitForTimeout(3000); // Esperar renderizado de tablas
 
       // Verificar si la sesión expiró durante la búsqueda
       const currentUrl = page.url();
