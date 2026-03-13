@@ -170,31 +170,31 @@ class ApxClientSingleton {
       });
     }
 
-    // Si el botón está habilitado, hacer click normal
-    try {
-      await this.loginPage.click("#botonLogin", { timeout: 2000 });
-    } catch {
-      // Ya se hizo submit via JS arriba
-    }
+    console.log("[APX] Clicking login...");
+    await this.loginPage.click("#botonLogin");
     
-    // Esperar a que cargue la página post-login
-    await this.loginPage.waitForLoadState("networkidle").catch(() => {
-      console.log("[APX] Post-login networkidle timeout, continuing...");
-    });
-    await this.loginPage.waitForTimeout(2000);
+    // Esperar a que cargue la página post-login (puede ser muy lento)
+    console.log("[APX] Waiting for authentication to complete (up to 60s)...");
+    try {
+      // Esperar por el texto de bienvenida que confirma el login exitoso
+      await this.loginPage.waitForSelector('text="BIENVENIDO"', { timeout: 60000 });
+      console.log("[APX] Login successful, dashboard reached.");
+    } catch (err) {
+      console.log("[APX] Warning: Welcome text not found within 60s, checking URL...");
+      if (this.loginPage.url().includes("/home/aplicaciones")) {
+        console.log("[APX] URL confirms we are in the dashboard.");
+      } else {
+        console.error("[APX] Login might have failed or is extremely slow.");
+      }
+    }
+
+    await this.loginPage.waitForTimeout(2000); // Darle un poco más de aire
 
     // Debug: capturar screenshot y HTML para diagnosticar
     try {
       await this.loginPage.screenshot({ path: "apx-login-debug.png", fullPage: true });
       console.log("[APX] Debug screenshot saved to apx-login-debug.png");
-      const pageTitle = await this.loginPage.title();
-      console.log("[APX] Page title:", pageTitle);
-      // Revisar si hay algún error visible en la página
-      const bodyText = await this.loginPage.$eval("body", (el: any) => el.innerText.substring(0, 500));
-      console.log("[APX] Page body (first 500 chars):", bodyText);
-    } catch (e) {
-      console.log("[APX] Debug capture failed:", e);
-    }
+    } catch {}
 
     console.log("[APX] Post-login URL:", this.loginPage.url());
     this.isLoggedIn = true;
@@ -208,43 +208,24 @@ class ApxClientSingleton {
     }
 
     const explorerUrl = "http://reportes.interrapidisimo.com/Reportes/ExploradorEnvios/ExploradorEnvios.aspx";
-    console.log(`[APX] Navigating directly to Explorador Envíos: ${explorerUrl}`);
+    console.log(`[APX] Opening Explorador Envíos in NEW TAB: ${explorerUrl}`);
 
     try {
-      // Intentar navegar directamente en lugar de hacer clic en la pestaña
-      // Esto suele funcionar si la sesión se comparte o se auto-valida
-      await this.loginPage!.goto(explorerUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      // Abrir una NUEVA PESTAÑA en el mismo contexto para compartir la sesión
+      this.explorerPage = await this.context!.newPage();
+      this.explorerPage.setDefaultTimeout(30000);
+      this.explorerPage.setDefaultNavigationTimeout(60000);
+
+      await this.explorerPage.goto(explorerUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
       
-      this.explorerPage = this.loginPage; // Reutilizamos la misma página para simplificar
+      // Esperar a que cargue el selector clave en el Explorador
+      await this.explorerPage.waitForSelector("#tbxNumeroGuia", { timeout: 20000 });
       
-      // Esperar a que cargue el selector clave
-      await this.explorerPage!.waitForSelector("#tbxNumeroGuia", { timeout: 15000 });
-      
-      console.log("[APX] Explorer page ready via direct navigation");
+      console.log("[APX] Explorer page (new tab) ready via direct navigation");
       this.isOnExplorerPage = true;
     } catch (error) {
-      console.log("[APX] Direct navigation failed or timed out, trying click fallback...");
-      
-      // Fallback: Si el salto directo no funciona, intentar el clic original
-      try {
-        await this.loginPage!.goto(this.loginUrl.replace("/auth/login", "/home/aplicaciones"), { waitUntil: "domcontentloaded" });
-        await this.loginPage!.waitForSelector('text="Explorador Envios"', { timeout: 15000 });
-        
-        const [newPage] = await Promise.all([
-          this.context!.waitForEvent("page", { timeout: 20000 }),
-          this.loginPage!.click('text="Explorador Envios"'),
-        ]);
-
-        this.explorerPage = newPage;
-        await this.explorerPage.waitForLoadState("domcontentloaded");
-        await this.explorerPage.waitForSelector("#tbxNumeroGuia", { timeout: 15000 });
-        
-        console.log("[APX] Explorer page ready via click fallback");
-        this.isOnExplorerPage = true;
-      } catch (fallbackError) {
-        console.error("[APX] Both direct navigation and click fallback failed:", fallbackError);
-        throw fallbackError;
-      }
+      console.log("[APX] Direct tab opening failed, error:", (error as any).message);
+      throw error;
     }
   }
 
