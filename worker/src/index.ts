@@ -1,5 +1,20 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import fs from "node:fs";
+
+const __filename2 = fileURLToPath(import.meta.url);
+const __dirname2 = path.dirname(__filename2);
+
+// Intentar cargar .env desde el directorio worker, si no, desde la raíz
+const workerEnvPath = path.resolve(__dirname2, "../.env");
+const rootEnvPath = path.resolve(__dirname2, "../../.env");
+
+if (fs.existsSync(workerEnvPath)) {
+  dotenv.config({ path: workerEnvPath });
+} else if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+}
 import { initDb, getDbPath } from "./db/index.js";
 import { checkInternet } from "./services/internet.js";
 import { getJobStats, processOnePaymentJob, processFetchPortalApx } from "./services/jobs.js";

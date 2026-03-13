@@ -72,12 +72,26 @@ class ApxClientSingleton {
     }
 
     const headless = process.env.HEADLESS !== "false";
-    console.log("[APX] Launching browser (headless:", headless, ")");
+    console.log("[APX] Launching browser (headless:", headless, ") - User:", this.user);
 
-    this.browser = await chromium.launch({ headless });
-    this.context = await this.browser.newContext();
+    this.browser = await chromium.launch({ 
+      headless,
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--no-sandbox",
+        "--disable-setuid-sandbox"
+      ],
+      ignoreDefaultArgs: ["--enable-automation"]
+    });
+    
+    this.context = await this.browser.newContext({
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+      javaScriptEnabled: true
+    });
 
-    console.log("[APX] Browser initialized");
+    console.log("[APX] Browser initialized with stealth settings. User Agent set.");
   }
 
   // ─── Login al portal APX ─────────────────────────────────
@@ -103,11 +117,11 @@ class ApxClientSingleton {
     this.isOnExplorerPage = false;
 
     this.loginPage = await this.context!.newPage();
-    this.loginPage.setDefaultTimeout(20000);
-    this.loginPage.setDefaultNavigationTimeout(40000);
+    this.loginPage.setDefaultTimeout(30000);
+    this.loginPage.setDefaultNavigationTimeout(60000);
 
-    // Navegar al login — networkidle para que Angular termine de inicializar
-    await this.loginPage.goto(this.loginUrl, { waitUntil: "networkidle" });
+    // Navegar al login — domcontentloaded es más rápido y menos propenso a colgarse que networkidle
+    await this.loginPage.goto(this.loginUrl, { waitUntil: "domcontentloaded" });
     console.log("[APX] Login page loaded:", this.loginPage.url());
 
     // Esperar que Angular renderice el formulario completamente
@@ -168,6 +182,19 @@ class ApxClientSingleton {
       console.log("[APX] Post-login networkidle timeout, continuing...");
     });
     await this.loginPage.waitForTimeout(2000);
+
+    // Debug: capturar screenshot y HTML para diagnosticar
+    try {
+      await this.loginPage.screenshot({ path: "apx-login-debug.png", fullPage: true });
+      console.log("[APX] Debug screenshot saved to apx-login-debug.png");
+      const pageTitle = await this.loginPage.title();
+      console.log("[APX] Page title:", pageTitle);
+      // Revisar si hay algún error visible en la página
+      const bodyText = await this.loginPage.$eval("body", (el: any) => el.innerText.substring(0, 500));
+      console.log("[APX] Page body (first 500 chars):", bodyText);
+    } catch (e) {
+      console.log("[APX] Debug capture failed:", e);
+    }
 
     console.log("[APX] Post-login URL:", this.loginPage.url());
     this.isLoggedIn = true;
