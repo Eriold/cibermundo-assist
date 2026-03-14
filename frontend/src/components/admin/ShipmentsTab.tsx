@@ -101,6 +101,7 @@ const ShipmentsTab: React.FC = () => {
       // Pedimos datos paginados al backend usando axios param
       const data = await getShipments({ page: specificPage, limit: 20, search: query, ...currentFilters });
       setShipments(data.data || []);
+      fetchGestionSummary();
       
       // Actualizamos metadatos de paginacion retornados del backend expr
       if (data.pagination) {

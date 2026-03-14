@@ -97,7 +97,7 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
              z.name as zone_name,
              st.name as status_name,
              mg.name as management_name,
-             u.name as checkout_by_name
+             COALESCE(u.name, CASE WHEN s.management_id = 2 AND s.checkout_date IS NOT NULL THEN 'E.D.App' END) as checkout_by_name
       FROM shipments s 
       LEFT JOIN zones z ON s.zone_id = z.id
       LEFT JOIN statuses st ON s.status_id = st.id
@@ -128,6 +128,9 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
 router.get("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { trackingNumber } = req.params;
+    if (trackingNumber === "export" || trackingNumber === "gestion-summary") {
+      return next();
+    }
     const row = get(
       "SELECT * FROM shipments WHERE tracking_number = :trackingNumber",
       { trackingNumber }

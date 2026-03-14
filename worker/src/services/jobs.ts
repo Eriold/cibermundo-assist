@@ -22,6 +22,92 @@ export interface Shipment {
   [key: string]: any;
 }
 
+interface TrackingFlowRow {
+  ciudad: string;
+  descripcion_estado: string;
+  fecha_cambio_estado: string;
+  observacion: string;
+  [key: string]: any;
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return (value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function parseApxDateToIso(value: string | null | undefined): string | null {
+  const raw = (value || "").replace(/\u00a0/g, " ").trim();
+  if (!raw) return null;
+
+  const match = raw.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*([ap])\.\s*m\.$/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const [, dd, mm, yyyy, hh, min, sec, meridiem] = match;
+  let hours = Number(hh);
+
+  if (meridiem.toLowerCase() === "p" && hours < 12) hours += 12;
+  if (meridiem.toLowerCase() === "a" && hours === 12) hours = 0;
+
+  const date = new Date(
+    Number(yyyy),
+    Number(mm) - 1,
+    Number(dd),
+    hours,
+    Number(min),
+    Number(sec)
+  );
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function analyzeTrackingFlow(rows: TrackingFlowRow[]): {
+  activeGestionCount: number;
+  deliveredFromApp: boolean;
+  deliveredAt: string | null;
+} {
+  let activeGestionCount = 0;
+  let deliveredFromApp = false;
+  let deliveredAt: string | null = null;
+
+  for (const row of rows) {
+    const ciudad = normalizeText(row.ciudad);
+    const estado = normalizeText(row.descripcion_estado);
+    const observacion = normalizeText(row.observacion);
+    const hasDate = (row.fecha_cambio_estado || "").trim().length > 0;
+
+    const isGestion =
+      ciudad.includes("URRAO") &&
+      estado.includes("DEVOLUCION") &&
+      hasDate;
+
+    if (isGestion) {
+      activeGestionCount += 1;
+      continue;
+    }
+
+    const isDelivered =
+      estado.includes("ENTREGA EXITOSA") &&
+      observacion.includes("ENTREGADO DESDE APP") &&
+      hasDate;
+
+    if (isDelivered) {
+      deliveredFromApp = true;
+      deliveredAt = parseApxDateToIso(row.fecha_cambio_estado);
+      activeGestionCount = 0;
+    }
+  }
+
+  return { activeGestionCount, deliveredFromApp, deliveredAt };
+}
+
 /**
  * Helper: verificacion robusta del estado del job
  */
@@ -509,6 +595,7 @@ export async function processFetchPortalApx(job: Job): Promise<void> {
     }
 
     const now = new Date().toISOString();
+    const flowAnalysis = analyzeTrackingFlow(data.tracking_flow as TrackingFlowRow[]);
 
     // 1. Actualizar shipment con datos del destinatario + gestion_count
     run(
@@ -516,13 +603,20 @@ export async function processFetchPortalApx(job: Job): Promise<void> {
         recipient_name = COALESCE(?, recipient_name),
         recipient_phone = COALESCE(?, recipient_phone),
         gestion_count = ?,
+        status_id = CASE WHEN ? THEN 2 ELSE status_id END,
+        management_id = CASE WHEN ? THEN 2 ELSE management_id END,
+        checkout_date = CASE WHEN ? IS NOT NULL THEN ? ELSE checkout_date END,
         apx_last_fetch_at = ?,
         updated_at = ?
        WHERE tracking_number = ?`,
       [
         data.recipient_name || null,
         data.recipient_phone || null,
-        data.gestion_count,
+        flowAnalysis.activeGestionCount,
+        flowAnalysis.deliveredFromApp ? 1 : 0,
+        flowAnalysis.deliveredFromApp ? 1 : 0,
+        flowAnalysis.deliveredAt,
+        flowAnalysis.deliveredAt,
         now,
         now,
         tracking_number,
@@ -567,7 +661,7 @@ export async function processFetchPortalApx(job: Job): Promise<void> {
     // 4. Marcar job como DONE
     markJobDone(id);
 
-    console.log(`✓ FETCH_PORTAL_APX success: ${tracking_number} (${data.tracking_flow.length} rows, ${data.gestion_count} gestiones)`);
+    console.log(`✓ FETCH_PORTAL_APX success: ${tracking_number} (${data.tracking_flow.length} rows, ${flowAnalysis.activeGestionCount} gestiones activas${flowAnalysis.deliveredFromApp ? ", entregado desde app" : ""})`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     markJobFailed(id, errorMsg, job.attempts, job.max_attempts);
