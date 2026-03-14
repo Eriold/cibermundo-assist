@@ -248,6 +248,7 @@ router.post("/load-gestiones", (req: Request, res: Response, next: NextFunction)
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0]; // YYYY-MM-DD
     const now = new Date().toISOString();
+    const forceReload = req.query.force === "true" || req.body?.force === true;
 
     // Obtener paquetes abiertos (status_id != 2 o NULL) que NO fueron actualizados hoy
     const openShipments = all<{ tracking_number: string }>(
@@ -255,8 +256,8 @@ router.post("/load-gestiones", (req: Request, res: Response, next: NextFunction)
        FROM shipments s
        LEFT JOIN statuses st ON s.status_id = st.id
        WHERE (st.name != 'Cerrado' OR s.status_id IS NULL)
-         AND (s.apx_last_fetch_at IS NULL OR s.apx_last_fetch_at < :today)`,
-      { ":today": todayStr }
+         AND (:forceReload = 1 OR s.apx_last_fetch_at IS NULL OR s.apx_last_fetch_at < :today)`,
+      { ":today": todayStr, ":forceReload": forceReload ? 1 : 0 }
     );
 
     let createdCount = 0;
@@ -286,6 +287,7 @@ router.post("/load-gestiones", (req: Request, res: Response, next: NextFunction)
       message: `Se crearon ${createdCount} jobs de gestión para ${openShipments.length} paquetes abiertos.`,
       total_open: openShipments.length,
       jobs_created: createdCount,
+      force_reload: forceReload,
     });
   } catch (e) {
     next(e);

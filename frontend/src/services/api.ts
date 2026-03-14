@@ -159,8 +159,10 @@ export const deleteManagement = async (id: number) => {
 // ==========================================
 // GESTIÓN TRACKING
 // ==========================================
-export const loadGestiones = async () => {
-  const res = await api.post('/shipments/load-gestiones');
+export const loadGestiones = async (force = false) => {
+  const res = await api.post('/shipments/load-gestiones', { force }, {
+    params: force ? { force: 'true' } : undefined,
+  });
   return res.data;
 };
 

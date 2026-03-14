@@ -240,7 +240,7 @@ const ShipmentsTab: React.FC = () => {
   const handleLoadGestiones = async () => {
     setLoadingGestiones(true);
     try {
-      const result = await loadGestiones();
+      const result = await loadGestiones(true);
       alert(`${result.message}`);
       // Recargar datos y resumen
       fetchShipments(false, page, searchTerm, filters);
