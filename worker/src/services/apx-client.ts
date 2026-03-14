@@ -49,6 +49,16 @@ class ApxClientSingleton {
   private explorerPage: Page | null = null;   // Página de Explorador Envíos (nueva pestaña)
   private isLoggedIn = false;
   private isOnExplorerPage = false;
+  private readonly recipientNameSelectors = [
+    "#tbxNombreDes",
+    "[id$='tbxNombreDes']",
+    "[name$='tbxNombreDes']",
+  ];
+  private readonly recipientPhoneSelectors = [
+    "#tbxTelefonoDes",
+    "[id$='tbxTelefonoDes']",
+    "[name$='tbxTelefonoDes']",
+  ];
 
   private get loginUrl(): string {
     return process.env.APX_URL || "https://www3.interrapidisimo.com/SitioLogin/auth/login";
@@ -289,6 +299,69 @@ class ApxClientSingleton {
     await this.navigateToExplorer();
   }
 
+  private async readFirstNonEmpty(page: Page, selectors: string[]): Promise<string | undefined> {
+    for (const selector of selectors) {
+      const value = await page.evaluate((sel) => {
+        const el = document.querySelector(sel) as
+          | HTMLInputElement
+          | HTMLTextAreaElement
+          | HTMLElement
+          | null;
+
+        if (!el) return null;
+
+        const candidates = [
+          "value" in el ? el.value : "",
+          el.getAttribute("value") || "",
+          el.getAttribute("title") || "",
+          el.textContent || "",
+          "innerText" in el ? (el as HTMLElement).innerText || "" : "",
+        ];
+
+        for (const candidate of candidates) {
+          const cleaned = candidate.replace(/\u00a0/g, " ").trim();
+          if (cleaned.length > 0) {
+            return cleaned;
+          }
+        }
+
+        return null;
+      }, selector).catch(() => null);
+
+      if (value && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+
+    return undefined;
+  }
+
+  private async scrapeRecipientInfo(page: Page): Promise<{
+    recipientName?: string;
+    recipientPhone?: string;
+  }> {
+    const timeoutMs = 12000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const [recipientName, recipientPhone] = await Promise.all([
+        this.readFirstNonEmpty(page, this.recipientNameSelectors),
+        this.readFirstNonEmpty(page, this.recipientPhoneSelectors),
+      ]);
+
+      if (recipientName || recipientPhone) {
+        return { recipientName, recipientPhone };
+      }
+
+      await page.waitForTimeout(500);
+    }
+
+    return {
+      recipientName: await this.readFirstNonEmpty(page, this.recipientNameSelectors),
+      recipientPhone: await this.readFirstNonEmpty(page, this.recipientPhoneSelectors),
+    };
+  }
+
   // ─── Buscar una guía específica ───────────────────────────
 
   async fetchGuideData(trackingNumber: string): Promise<ApxResult> {
@@ -345,15 +418,9 @@ class ApxClientSingleton {
       let recipientPhone: string | undefined;
 
       try {
-        // Esperar a que el campo de nombre tenga algún valor (no esté vacío)
-        await page.waitForFunction(() => {
-          const el = document.querySelector("#tbxNombreDes") as HTMLInputElement;
-          return el && el.value && el.value.trim().length > 0;
-        }, { timeout: 5000 }).catch(() => console.log("[APX] Timeout waiting for recipient name value"));
-
-        // Obtener valores usando getAttribute o property value
-        recipientName = await page.$eval("#tbxNombreDes", (el: any) => el.value).catch(() => undefined);
-        recipientPhone = await page.$eval("#tbxTelefonoDes", (el: any) => el.value).catch(() => undefined);
+        const recipientData = await this.scrapeRecipientInfo(page);
+        recipientName = recipientData.recipientName;
+        recipientPhone = recipientData.recipientPhone;
       } catch (err) {
         console.log("[APX] Error scraping recipient info:", (err as any).message);
       }
@@ -370,6 +437,13 @@ class ApxClientSingleton {
       try {
         await page.click("#__tab_TabContainer2_TabPanel7", { timeout: 10000 });
         await page.waitForTimeout(1500); // Esperar carga del tab
+
+        // Reintentar lectura del destinatario después del postback/tab switch
+        if (!recipientName || !recipientPhone) {
+          const recipientData = await this.scrapeRecipientInfo(page);
+          recipientName = recipientName || recipientData.recipientName;
+          recipientPhone = recipientPhone || recipientData.recipientPhone;
+        }
       } catch (err) {
         console.log("[APX] Could not click Flujo Guía tab:", err);
         return {
