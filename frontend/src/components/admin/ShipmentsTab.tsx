@@ -22,6 +22,8 @@ interface Shipment {
   management_name?: string;
   client_name?: string;
   client_phone?: string;
+  recipient_name?: string;
+  recipient_phone?: string;
   obs_1?: string;
   obs_2?: string;
   obs_3?: string;
@@ -279,7 +281,7 @@ const ShipmentsTab: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col overflow-visible">
         {/* Actions Bar */}
         <div className="flex justify-between items-center mb-4 shrink-0">
             <div>
@@ -458,8 +460,8 @@ const ShipmentsTab: React.FC = () => {
             </div>
         </div>
 
-        <div className="flex-1 bg-white dark:bg-[#181811] rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 overflow-hidden flex flex-col min-h-0">
-            <div className="overflow-x-auto overflow-y-auto flex-1 h-full">
+        <div className="bg-white dark:bg-[#181811] rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 overflow-visible flex flex-col">
+            <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[1000px] h-max">
                 <thead className="sticky top-0 bg-gray-50 dark:bg-[#2c2b1f] border-b border-gray-200 dark:border-white/10 z-10 shadow-sm">
                     <tr>
@@ -530,15 +532,15 @@ const ShipmentsTab: React.FC = () => {
                                 {formatDate(ship.scanned_at)}
                             </td>
                             <td className="p-4 text-sm">
-                                {ship.client_name ? (
-                                    <p className="font-bold text-dark-text dark:text-white w-48 truncate" title={ship.client_name}>{ship.client_name}</p>
+                                {(ship.recipient_name || ship.client_name) ? (
+                                    <p className="font-bold text-dark-text dark:text-white w-48 truncate" title={ship.recipient_name || ship.client_name}>{ship.recipient_name || ship.client_name}</p>
                                 ) : (
-                                    <span className="text-gray-400 italic">No digitado</span>
+                                    <span className="text-gray-400 italic">No disponible</span>
                                 )}
                             </td>
                             <td className="p-4 text-sm">
-                                {ship.client_phone ? (
-                                    <p className="text-gray-700 dark:text-gray-300">{ship.client_phone}</p>
+                                {(ship.recipient_phone || ship.client_phone) ? (
+                                    <p className="text-gray-700 dark:text-gray-300">{ship.recipient_phone || ship.client_phone}</p>
                                 ) : (
                                     <span className="text-gray-400 italic">-</span>
                                 )}
@@ -724,8 +726,8 @@ const ShipmentsTab: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Nombre del Cliente</label>
                                 <input 
-                                    type="text" name="client_name"
-                                    value={editForm.client_name || ''} onChange={handleFormChange}
+                                    type="text" name="recipient_name"
+                                    value={editForm.recipient_name || editForm.client_name || ''} onChange={handleFormChange}
                                     className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#2c2b1f] text-dark-text dark:text-white px-4 py-3 outline-none focus:border-primary transition-colors"
                                     placeholder="Ej. Juan Pérez"
                                 />
@@ -733,8 +735,8 @@ const ShipmentsTab: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Teléfono Móvil</label>
                                 <input 
-                                    type="tel" name="client_phone"
-                                    value={editForm.client_phone || ''} onChange={handleFormChange}
+                                    type="tel" name="recipient_phone"
+                                    value={editForm.recipient_phone || editForm.client_phone || ''} onChange={handleFormChange}
                                     className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#2c2b1f] text-dark-text dark:text-white px-4 py-3 outline-none focus:border-primary transition-colors"
                                     placeholder="Ej. 3001234567"
                                 />
@@ -796,7 +798,7 @@ const ShipmentsTab: React.FC = () => {
                                     <p className="text-sm font-bold">Sin datos de flujo. Presione "Cargar Gestiones" para actualizar.</p>
                                 </div>
                             ) : (
-                                <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10">
+                                <div className="overflow-x-auto border border-gray-200 dark:border-white/10">
                                     <table className="w-full text-left text-xs min-w-[700px]">
                                         <thead className="bg-gray-50 dark:bg-[#2c2b1f]">
                                             <tr>

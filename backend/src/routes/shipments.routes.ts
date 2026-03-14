@@ -392,6 +392,7 @@ router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunctio
     // 2. Manejar actualización de campos dinámicos Fase 7
     const updatableFields = [
       'client_name', 'client_phone', 
+      'recipient_name', 'recipient_phone',
       'obs_1', 'obs_2', 'obs_3', 
       'status_id', 'management_id', 
       'checkout_date', 'checkout_by', 'zone_id',

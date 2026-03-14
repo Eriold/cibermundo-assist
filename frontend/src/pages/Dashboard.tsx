@@ -14,7 +14,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="bg-background-light dark:bg-background-dark font-display h-screen w-full flex flex-col pt-6 overflow-hidden">
+    <div className="bg-background-light dark:bg-background-dark font-display min-h-screen w-full flex flex-col pt-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 pb-4 border-b border-gray-200 dark:border-white/10 shrink-0">
         <div className="flex items-center gap-4">
@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Main Content Area (Layout Body) */}
-      <div className="flex-1 p-6 overflow-hidden flex flex-col min-h-0 bg-[#f8f9fa] dark:bg-transparent">
+      <div className="flex-1 p-6 overflow-visible flex flex-col bg-[#f8f9fa] dark:bg-transparent">
          {/* Sub-componentes inyectados aquí */}
          <Outlet />
       </div>
