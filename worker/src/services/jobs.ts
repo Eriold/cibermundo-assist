@@ -33,6 +33,8 @@ interface TrackingFlowRow {
 function normalizeText(value: string | null | undefined): string {
   return (value || "")
     .replace(/\u00a0/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
