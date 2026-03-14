@@ -73,11 +73,12 @@ function analyzeTrackingFlow(rows: TrackingFlowRow[]): {
   deliveredFromApp: boolean;
   deliveredAt: string | null;
 } {
-  let activeGestionCount = 0;
-  let deliveredFromApp = false;
-  let deliveredAt: string | null = null;
+  let totalGestiones = 0;
+  let lastGestionIndex = -1;
+  let lastDeliveredIndex = -1;
+  let lastDeliveredAt: string | null = null;
 
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     const ciudad = normalizeText(row.ciudad);
     const estado = normalizeText(row.descripcion_estado);
     const observacion = normalizeText(row.observacion);
@@ -89,8 +90,9 @@ function analyzeTrackingFlow(rows: TrackingFlowRow[]): {
       hasDate;
 
     if (isGestion) {
-      activeGestionCount += 1;
-      continue;
+      totalGestiones += 1;
+      lastGestionIndex = index;
+      return;
     }
 
     const isDelivered =
@@ -99,13 +101,18 @@ function analyzeTrackingFlow(rows: TrackingFlowRow[]): {
       hasDate;
 
     if (isDelivered) {
-      deliveredFromApp = true;
-      deliveredAt = parseApxDateToIso(row.fecha_cambio_estado);
-      activeGestionCount = 0;
+      lastDeliveredIndex = index;
+      lastDeliveredAt = parseApxDateToIso(row.fecha_cambio_estado);
     }
-  }
+  });
 
-  return { activeGestionCount, deliveredFromApp, deliveredAt };
+  const deliveredFromApp = lastDeliveredIndex > lastGestionIndex && lastDeliveredIndex !== -1;
+
+  return {
+    activeGestionCount: deliveredFromApp ? 0 : totalGestiones,
+    deliveredFromApp,
+    deliveredAt: deliveredFromApp ? lastDeliveredAt : null,
+  };
 }
 
 /**
