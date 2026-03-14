@@ -37,8 +37,10 @@ export const updateShipmentTracking = async (oldTracking: string, updateData: an
   return res.data;
 };
 
-export const deleteShipment = async (trackingNumber: string) => {
-  const res = await api.delete(`/shipments/${trackingNumber}`);
+export const deleteShipment = async (trackingNumber: string, recordSource: 'active' | 'archive' = 'active') => {
+  const res = await api.delete(`/shipments/${trackingNumber}`, {
+    params: recordSource === 'archive' ? { recordSource } : undefined,
+  });
   return res.data;
 };
 
@@ -171,8 +173,8 @@ export const getTrackingHistory = async (trackingNumber: string) => {
   return res.data;
 };
 
-export const getGestionSummary = async () => {
-  const res = await api.get('/shipments/gestion-summary');
+export const getGestionSummary = async (scope: 'open' | 'closed' = 'open') => {
+  const res = await api.get('/shipments/gestion-summary', { params: { scope } });
   return res.data;
 };
 

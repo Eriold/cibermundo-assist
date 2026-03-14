@@ -31,6 +31,7 @@ interface Shipment {
   checkout_by?: string;
   message_sent?: number;
   gestion_count?: number;
+  record_source?: 'active' | 'archive';
 }
 
 interface CatalogItem {
@@ -99,9 +100,9 @@ const ShipmentsTab: React.FC = () => {
     if (!silent) setErrorMsg('');
     try {
       // Pedimos datos paginados al backend usando axios param
-      const data = await getShipments({ page: specificPage, limit: 20, search: query, ...currentFilters });
+      const data = await getShipments({ page: specificPage, limit: 20, scope: activeTab, search: query, ...currentFilters });
       setShipments(data.data || []);
-      fetchGestionSummary();
+      fetchGestionSummary(activeTab);
       
       // Actualizamos metadatos de paginacion retornados del backend expr
       if (data.pagination) {
@@ -148,6 +149,7 @@ const ShipmentsTab: React.FC = () => {
       const session = getSession();
       const payload: any = {
         ...editForm,
+        record_source: editingShipment.record_source || 'active',
         newTrackingNumber: editForm.tracking_number
       };
       
@@ -173,7 +175,7 @@ const ShipmentsTab: React.FC = () => {
     if (!shipmentToDelete) return;
     setDeleting(true);
     try {
-      await deleteShipment(shipmentToDelete.tracking_number);
+      await deleteShipment(shipmentToDelete.tracking_number, shipmentToDelete.record_source || 'active');
       setShowDeleteModal(false);
       fetchShipments(false, page, searchTerm, filters);
     } catch (err: any) {
@@ -186,8 +188,13 @@ const ShipmentsTab: React.FC = () => {
   useEffect(() => {
     fetchCatalogs();
     fetchShipments(false, 1, '', filters);
-    fetchGestionSummary();
   }, []);
+
+  useEffect(() => {
+    setGestionFilter(null);
+    fetchShipments(false, 1, searchTerm, filters);
+    fetchGestionSummary(activeTab);
+  }, [activeTab]);
 
   // Poll interval effect
   useEffect(() => {
@@ -228,9 +235,9 @@ const ShipmentsTab: React.FC = () => {
 
   // ─── Gestión Tracking Functions ─────────────────────────────
 
-  const fetchGestionSummary = async () => {
+  const fetchGestionSummary = async (scope: TabMode = activeTab) => {
     try {
-      const data = await getGestionSummary();
+      const data = await getGestionSummary(scope);
       setGestionSummary(data);
     } catch (e) {
       console.error('Error fetching gestion summary', e);
@@ -244,7 +251,7 @@ const ShipmentsTab: React.FC = () => {
       alert(`${result.message}`);
       // Recargar datos y resumen
       fetchShipments(false, page, searchTerm, filters);
-      fetchGestionSummary();
+      fetchGestionSummary(activeTab);
     } catch (e: any) {
       alert(e.response?.data?.error || 'Error al cargar gestiones');
     } finally {
@@ -280,6 +287,13 @@ const ShipmentsTab: React.FC = () => {
     handleOpenEdit(ship);
     fetchTrackingForModal(ship.tracking_number);
   };
+
+  const visibleShipments = shipments.filter((s: any) => {
+    if (gestionFilter !== null) return (s.gestion_count ?? 0) === gestionFilter;
+    return true;
+  });
+
+  const totalCollect = shipments.reduce((sum: number, s: any) => sum + (s.amount_total || 0), 0);
 
   return (
     <div className="flex flex-col overflow-visible">
@@ -478,10 +492,6 @@ const ShipmentsTab: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                     {(() => {
-                        const filteredShipments = (shipments as any[]).filter((s: any) => 
-                            activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado'
-                        );
-
                         if (loading && shipments.length === 0) {
                             return (
                                 <tr>
@@ -495,7 +505,7 @@ const ShipmentsTab: React.FC = () => {
                             );
                         }
 
-                        if (filteredShipments.length === 0) {
+                        if (visibleShipments.length === 0) {
                             return (
                                 <tr>
                                     <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
@@ -508,10 +518,7 @@ const ShipmentsTab: React.FC = () => {
                             );
                         }
 
-                        return filteredShipments.filter((s: any) => {
-                          if (gestionFilter !== null) return (s.gestion_count ?? 0) === gestionFilter;
-                          return true;
-                        }).map((ship: any, i: number) => {
+                        return visibleShipments.map((ship: any, i: number) => {
                         const badge = getGestionBadge(ship.gestion_count);
                         return (
                         <tr key={ship.tracking_number + i} className={`hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors ${badge.border}`}>
@@ -598,11 +605,9 @@ const ShipmentsTab: React.FC = () => {
                 </tbody>
                 <tfoot className="sticky bottom-0 bg-gray-100 dark:bg-[#1f1e16] border-t border-gray-200 dark:border-white/10 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <tr>
-                        <td colSpan={5} className="p-4 text-right font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest text-sm">Total a Recolectar ({(shipments as any[]).filter((s: any) => 
-                            activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado'
-                        ).length}):</td>
+                        <td colSpan={5} className="p-4 text-right font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest text-sm">Total a Recolectar ({shipments.length}):</td>
                         <td className="p-4 font-black text-primary text-lg">
-                            ${(shipments as any[]).filter((s: any) => activeTab === 'open' ? s.status_name !== 'Cerrado' : s.status_name === 'Cerrado').reduce((sum: number, s: any) => sum + (s.amount_total || 0), 0).toLocaleString()}
+                            ${totalCollect.toLocaleString()}
                         </td>
                         <td colSpan={2} className="p-4">
                           <div className="flex items-center gap-2 justify-end">

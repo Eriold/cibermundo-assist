@@ -3,6 +3,81 @@ import { all, get, run } from "../db/index.js";
 
 const router = Router();
 
+type Scope = "open" | "closed";
+
+function parseScope(value: unknown): Scope {
+  return value === "closed" ? "closed" : "open";
+}
+
+function buildShipmentFilters(req: Request, alias: string) {
+  const clauses = ["1=1"];
+  const params: Record<string, any> = {};
+  const search = req.query.search as string | undefined;
+
+  if (search) {
+    clauses.push(`${alias}.tracking_number LIKE :search`);
+    params.search = `%${search}%`;
+  }
+
+  if (req.query.zoneId && typeof req.query.zoneId === "string") {
+    const zId = parseInt(req.query.zoneId, 10);
+    if (!isNaN(zId) && zId > 0) {
+      clauses.push(`${alias}.zone_id = :zoneId`);
+      params.zoneId = zId;
+    }
+  }
+
+  if (req.query.managementId && typeof req.query.managementId === "string") {
+    const mId = parseInt(req.query.managementId, 10);
+    if (!isNaN(mId) && mId > 0) {
+      clauses.push(`${alias}.management_id = :managementId`);
+      params.managementId = mId;
+    }
+  }
+
+  if (req.query.dateFrom && typeof req.query.dateFrom === "string") {
+    clauses.push(`${alias}.scanned_at >= :dateFrom`);
+    params.dateFrom = req.query.dateFrom;
+  }
+
+  if (req.query.dateTo && typeof req.query.dateTo === "string") {
+    clauses.push(`${alias}.scanned_at <= :dateTo`);
+    params.dateTo = req.query.dateTo + "T23:59:59.999Z";
+  }
+
+  return {
+    whereClause: clauses.join(" AND "),
+    params,
+  };
+}
+
+function normalizeUpdateValue(field: string, value: unknown) {
+  if (value === "" && ["status_id", "management_id", "zone_id", "checkout_date", "checkout_by"].includes(field)) {
+    return null;
+  }
+  return value;
+}
+
+function enqueueApxJobIfNeeded(trackingNumber: string) {
+  const existingJob = get<{ id: number }>(
+    `SELECT id FROM jobs
+     WHERE tracking_number = :trackingNumber
+       AND type = 'FETCH_PORTAL_APX'
+       AND status IN ('PENDING', 'RUNNING')
+     LIMIT 1`,
+    { ":trackingNumber": trackingNumber }
+  );
+
+  if (!existingJob) {
+    const now = new Date().toISOString();
+    run(
+      `INSERT INTO jobs (type, tracking_number, status, attempts, max_attempts, run_after, created_at, updated_at)
+       VALUES ('FETCH_PORTAL_APX', :trackingNumber, 'PENDING', 0, 3, :now, :now, :now)`,
+      { ":trackingNumber": trackingNumber, ":now": now }
+    );
+  }
+}
+
 // Escapar valor para CSV según RFC 4180
 function escapeCSV(value: any): string {
   if (value === null || value === undefined) {
@@ -41,74 +116,187 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string || "1", 10);
     const limit = parseInt(req.query.limit as string || "20", 10);
-    const search = req.query.search as string;
+    const scope = parseScope(req.query.scope);
 
     // Fallbacks de seguridad
     const safePage = page > 0 ? page : 1;
     const safeLimit = limit > 0 && limit <= 100 ? limit : 20;
 
     const offset = (safePage - 1) * safeLimit;
+    const { whereClause, params: filterParams } = buildShipmentFilters(req, "s");
 
-    let whereClause = "1=1";
-    const params: Record<string, any> = { limit: safeLimit, offset: offset };
+    let countSql = "";
+    let sql = "";
+    let rows: any[] = [];
+    let totalCount = 0;
 
-    if (search) {
-      whereClause += " AND s.tracking_number LIKE :search";
-      params.search = `%${search}%`;
+    if (scope === "open") {
+      const params = { ...filterParams, limit: safeLimit, offset };
+      countSql = `
+        SELECT COUNT(*) as count
+        FROM shipments s
+        LEFT JOIN statuses st ON s.status_id = st.id
+        WHERE ${whereClause}
+          AND (st.name != 'Cerrado' OR s.status_id IS NULL)
+      `;
+      const countRow = get<{ count: number }>(countSql, params);
+      totalCount = countRow ? countRow.count : 0;
+
+      sql = `
+        SELECT s.*,
+               z.name as zone_name,
+               st.name as status_name,
+               mg.name as management_name,
+               COALESCE(u.name, CASE WHEN s.management_id = 2 AND s.checkout_date IS NOT NULL THEN 'E.D.App' END) as checkout_by_name,
+               'active' as record_source
+        FROM shipments s
+        LEFT JOIN zones z ON s.zone_id = z.id
+        LEFT JOIN statuses st ON s.status_id = st.id
+        LEFT JOIN managements mg ON s.management_id = mg.id
+        LEFT JOIN users u ON s.checkout_by = u.id
+        WHERE ${whereClause}
+          AND (st.name != 'Cerrado' OR s.status_id IS NULL)
+        ORDER BY s.scanned_at DESC
+        LIMIT :limit OFFSET :offset
+      `;
+      rows = all(sql, params);
+    } else {
+      const closedFilters = buildShipmentFilters(req, "base");
+      const countParams = { ...closedFilters.params };
+      const queryParams = { ...closedFilters.params, limit: safeLimit, offset };
+
+      countSql = `
+        SELECT COUNT(*) as count
+        FROM (
+          SELECT s.tracking_number, s.scanned_at
+          FROM shipments s
+          LEFT JOIN statuses st ON s.status_id = st.id
+          WHERE ${closedFilters.whereClause}
+            AND st.name = 'Cerrado'
+
+          UNION ALL
+
+          SELECT a.tracking_number, a.scanned_at
+          FROM shipments_archive a
+          WHERE ${closedFilters.whereClause.replaceAll("base.", "a.")}
+        ) base
+      `;
+      const countRow = get<{ count: number }>(countSql, countParams);
+      totalCount = countRow ? countRow.count : 0;
+
+      sql = `
+        SELECT *
+        FROM (
+          SELECT
+            s.tracking_number,
+            NULL as archived_at,
+            s.created_at,
+            s.updated_at,
+            s.scanned_at,
+            s.scanned_by,
+            s.delivery_type,
+            s.zone_id,
+            s.status_id,
+            s.management_id,
+            s.office_status,
+            s.notes,
+            s.obs_1,
+            s.obs_2,
+            s.obs_3,
+            s.client_name,
+            s.client_phone,
+            s.checkout_date,
+            s.checkout_by,
+            s.message_sent,
+            s.recipient_name,
+            s.recipient_id,
+            s.recipient_phone,
+            s.api_last_fetch_at,
+            s.apx_last_fetch_at,
+            s.api_success,
+            s.api_message,
+            s.api_current_state_id,
+            s.api_current_state_desc,
+            s.api_current_city,
+            s.api_current_state_at,
+            s.payment_code,
+            s.payment_desc,
+            s.amount_total,
+            s.amount_declared,
+            s.amount_to_collect,
+            s.gestion_count,
+            z.name as zone_name,
+            st.name as status_name,
+            mg.name as management_name,
+            COALESCE(u.name, CASE WHEN s.management_id = 2 AND s.checkout_date IS NOT NULL THEN 'E.D.App' END) as checkout_by_name,
+            'active' as record_source
+          FROM shipments s
+          LEFT JOIN zones z ON s.zone_id = z.id
+          LEFT JOIN statuses st ON s.status_id = st.id
+          LEFT JOIN managements mg ON s.management_id = mg.id
+          LEFT JOIN users u ON s.checkout_by = u.id
+          WHERE ${whereClause}
+            AND st.name = 'Cerrado'
+
+          UNION ALL
+
+          SELECT
+            a.tracking_number,
+            a.archived_at,
+            a.created_at,
+            a.updated_at,
+            a.scanned_at,
+            a.scanned_by,
+            a.delivery_type,
+            a.zone_id,
+            a.status_id,
+            a.management_id,
+            a.office_status,
+            a.notes,
+            a.obs_1,
+            a.obs_2,
+            a.obs_3,
+            a.client_name,
+            a.client_phone,
+            a.checkout_date,
+            a.checkout_by,
+            a.message_sent,
+            a.recipient_name,
+            a.recipient_id,
+            a.recipient_phone,
+            a.api_last_fetch_at,
+            a.apx_last_fetch_at,
+            a.api_success,
+            a.api_message,
+            a.api_current_state_id,
+            a.api_current_state_desc,
+            a.api_current_city,
+            a.api_current_state_at,
+            a.payment_code,
+            a.payment_desc,
+            a.amount_total,
+            a.amount_declared,
+            a.amount_to_collect,
+            a.gestion_count,
+            z.name as zone_name,
+            st.name as status_name,
+            mg.name as management_name,
+            COALESCE(u.name, CASE WHEN a.management_id = 2 AND a.checkout_date IS NOT NULL THEN 'E.D.App' END) as checkout_by_name,
+            'archive' as record_source
+          FROM shipments_archive a
+          LEFT JOIN zones z ON a.zone_id = z.id
+          LEFT JOIN statuses st ON a.status_id = st.id
+          LEFT JOIN managements mg ON a.management_id = mg.id
+          LEFT JOIN users u ON a.checkout_by = u.id
+          WHERE ${whereClause.replaceAll("s.", "a.")}
+        ) base
+        ORDER BY base.scanned_at DESC
+        LIMIT :limit OFFSET :offset
+      `;
+      rows = all(sql, queryParams);
     }
 
-    if (req.query.zoneId && typeof req.query.zoneId === "string") {
-        const zId = parseInt(req.query.zoneId, 10);
-        if (!isNaN(zId) && zId > 0) {
-            whereClause += " AND s.zone_id = :zoneId";
-            params.zoneId = zId;
-        }
-    }
-
-    if (req.query.managementId && typeof req.query.managementId === "string") {
-        const mId = parseInt(req.query.managementId, 10);
-        if (!isNaN(mId) && mId > 0) {
-            whereClause += " AND s.management_id = :managementId";
-            params.managementId = mId;
-        }
-    }
-
-    if (req.query.dateFrom && typeof req.query.dateFrom === "string") {
-        whereClause += " AND s.scanned_at >= :dateFrom";
-        params.dateFrom = req.query.dateFrom;
-    }
-
-    if (req.query.dateTo && typeof req.query.dateTo === "string") {
-        // Asumiendo que viene en formato YYYY-MM-DD, le añadimos horas al final del día por si acaso,
-        // o asumimos que el frontend manda ISO completo. Lo trataremos como string literal para comparación de diccionarios sqlite.
-        whereClause += " AND s.scanned_at <= :dateTo";
-        params.dateTo = req.query.dateTo + "T23:59:59.999Z"; // Acaparar todo el día final
-    }
-
-    // Primero contamos el total para armar UI en React
-    let countSql = `SELECT COUNT(*) as count FROM shipments s WHERE ${whereClause}`;
-    const countRow = get<{ count: number }>(countSql, params);
-    const totalCount = countRow ? countRow.count : 0;
-    const totalPages = Math.ceil(totalCount / safeLimit);
-
-    // Luego jalamos 1 sola pagina con sus Foraneas resueltas (Zonas, Gestiones y Estados)
-    let sql = `
-      SELECT s.*, 
-             z.name as zone_name,
-             st.name as status_name,
-             mg.name as management_name,
-             COALESCE(u.name, CASE WHEN s.management_id = 2 AND s.checkout_date IS NOT NULL THEN 'E.D.App' END) as checkout_by_name
-      FROM shipments s 
-      LEFT JOIN zones z ON s.zone_id = z.id
-      LEFT JOIN statuses st ON s.status_id = st.id
-      LEFT JOIN managements mg ON s.management_id = mg.id
-      LEFT JOIN users u ON s.checkout_by = u.id
-      WHERE ${whereClause}
-      ORDER BY s.scanned_at DESC
-      LIMIT :limit OFFSET :offset
-    `;
-    const rows = all(sql, params);
-
+    const totalPages = Math.max(1, Math.ceil(totalCount / safeLimit));
     res.json({
         data: rows,
         pagination: {
@@ -297,15 +485,32 @@ router.post("/load-gestiones", (req: Request, res: Response, next: NextFunction)
 // GET /gestion-summary - Retorna conteo agrupado por gestion_count
 router.get("/gestion-summary", (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Solo paquetes abiertos (no cerrados)
-    const rows = all<{ gestion_count: number; count: number }>(
-      `SELECT COALESCE(s.gestion_count, 0) as gestion_count, COUNT(*) as count
-       FROM shipments s
-       LEFT JOIN statuses st ON s.status_id = st.id
-       WHERE (st.name != 'Cerrado' OR s.status_id IS NULL)
-       GROUP BY COALESCE(s.gestion_count, 0)
-       ORDER BY gestion_count ASC`
-    );
+    const scope = parseScope(req.query.scope);
+    const rows = scope === "open"
+      ? all<{ gestion_count: number; count: number }>(
+          `SELECT COALESCE(s.gestion_count, 0) as gestion_count, COUNT(*) as count
+           FROM shipments s
+           LEFT JOIN statuses st ON s.status_id = st.id
+           WHERE (st.name != 'Cerrado' OR s.status_id IS NULL)
+           GROUP BY COALESCE(s.gestion_count, 0)
+           ORDER BY gestion_count ASC`
+        )
+      : all<{ gestion_count: number; count: number }>(
+          `SELECT gestion_count, COUNT(*) as count
+           FROM (
+             SELECT COALESCE(s.gestion_count, 0) as gestion_count
+             FROM shipments s
+             LEFT JOIN statuses st ON s.status_id = st.id
+             WHERE st.name = 'Cerrado'
+
+             UNION ALL
+
+             SELECT COALESCE(a.gestion_count, 0) as gestion_count
+             FROM shipments_archive a
+           ) grouped
+           GROUP BY gestion_count
+           ORDER BY gestion_count ASC`
+        );
 
     const summary: Record<string, number> = {
       gestion_0: 0,
@@ -340,6 +545,9 @@ router.get("/:trackingNumber/tracking", (req: Request, res: Response, next: Next
     const shipment = get<{ apx_last_fetch_at: string | null }>(
       `SELECT apx_last_fetch_at FROM shipments WHERE tracking_number = :tn`,
       { ":tn": trackingNumber }
+    ) || get<{ apx_last_fetch_at: string | null }>(
+      `SELECT apx_last_fetch_at FROM shipments_archive WHERE tracking_number = :tn`,
+      { ":tn": trackingNumber }
     );
 
     res.json({
@@ -357,6 +565,130 @@ router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunctio
   try {
     const { trackingNumber } = req.params;
     const body = req.body;
+
+    if (body.record_source === "archive") {
+      let archiveTracking = trackingNumber;
+      const archived = get<any>(
+        "SELECT * FROM shipments_archive WHERE tracking_number = :tracking",
+        { ":tracking": archiveTracking }
+      );
+
+      if (!archived) {
+        return res.status(404).json({ error: "GuÃ­a archivada no encontrada" });
+      }
+
+      if (body.newTrackingNumber && typeof body.newTrackingNumber === "string") {
+        const trimmedNew = body.newTrackingNumber.trim();
+
+        if (!/^\d{4,20}$/.test(trimmedNew)) {
+          return res.status(400).json({ error: "El nuevo nÃºmero de guÃ­a debe contener solo de 4 a 20 nÃºmeros." });
+        }
+
+        if (archiveTracking !== trimmedNew) {
+          const duplicate = get(
+            `SELECT tracking_number FROM shipments WHERE tracking_number = :new
+             UNION ALL
+             SELECT tracking_number FROM shipments_archive WHERE tracking_number = :new
+             LIMIT 1`,
+            { ":new": trimmedNew }
+          );
+
+          if (duplicate) {
+            return res.status(409).json({ error: "Esta guÃ­a ya se encuentra registrada en el sistema." });
+          }
+
+          run(
+            "UPDATE shipments_archive SET tracking_number = :new WHERE tracking_number = :old",
+            { ":old": archiveTracking, ":new": trimmedNew }
+          );
+
+          run(
+            "UPDATE shipment_tracking SET tracking_number = :new WHERE tracking_number = :old",
+            { ":old": archiveTracking, ":new": trimmedNew }
+          );
+
+          archiveTracking = trimmedNew;
+        }
+      }
+
+      const archiveFields = [
+        "client_name", "client_phone",
+        "recipient_name", "recipient_phone",
+        "obs_1", "obs_2", "obs_3",
+        "status_id", "management_id",
+        "checkout_date", "checkout_by", "zone_id",
+        "amount_total"
+      ];
+      const archiveUpdates: string[] = [];
+      const archiveParams: Record<string, any> = { ":tracking": archiveTracking };
+
+      for (const field of archiveFields) {
+        if (body[field] !== undefined) {
+          archiveUpdates.push(`${field} = :${field}`);
+          archiveParams[`:${field}`] = normalizeUpdateValue(field, body[field]);
+        }
+      }
+
+      if (archiveUpdates.length > 0) {
+        run(
+          `UPDATE shipments_archive SET ${archiveUpdates.join(", ")} WHERE tracking_number = :tracking`,
+          archiveParams
+        );
+      }
+
+      const updatedArchive = get<any>(
+        "SELECT * FROM shipments_archive WHERE tracking_number = :tracking",
+        { ":tracking": archiveTracking }
+      );
+
+      const shouldRestoreToActive =
+        body.status_id !== undefined &&
+        updatedArchive &&
+        Number(updatedArchive.status_id) !== 2;
+
+      if (shouldRestoreToActive) {
+        run(
+          `INSERT INTO shipments (
+            tracking_number, created_at, updated_at, scanned_at, scanned_by,
+            delivery_type, zone_id, status_id, management_id, office_status,
+            notes, obs_1, obs_2, obs_3, client_name, client_phone,
+            checkout_date, checkout_by, message_sent, recipient_name, recipient_id,
+            recipient_phone, api_last_fetch_at, apx_last_fetch_at, api_success,
+            api_message, api_current_state_id, api_current_state_desc, api_current_city,
+            api_current_state_at, payment_code, payment_desc, amount_total,
+            amount_declared, amount_to_collect, gestion_count
+          )
+          SELECT
+            tracking_number, created_at, datetime('now'), scanned_at, scanned_by,
+            delivery_type, zone_id, status_id, management_id, office_status,
+            notes, obs_1, obs_2, obs_3, client_name, client_phone,
+            checkout_date, checkout_by, message_sent, recipient_name, recipient_id,
+            recipient_phone, api_last_fetch_at, apx_last_fetch_at, api_success,
+            api_message, api_current_state_id, api_current_state_desc, api_current_city,
+            api_current_state_at, payment_code, payment_desc, amount_total,
+            amount_declared, amount_to_collect, gestion_count
+          FROM shipments_archive
+          WHERE tracking_number = :tracking`,
+          { ":tracking": archiveTracking }
+        );
+
+        run(
+          "DELETE FROM shipments_archive WHERE tracking_number = :tracking",
+          { ":tracking": archiveTracking }
+        );
+
+        enqueueApxJobIfNeeded(archiveTracking);
+
+        return res.json({
+          ok: true,
+          restored_to_active: true,
+          message: "GuÃ­a archivada reabierta y movida a activas correctamente",
+        });
+      }
+
+      return res.json({ ok: true, message: "GuÃ­a archivada actualizada correctamente" });
+    }
+
     let oldTracking = trackingNumber;
 
     // Verificar si el viejo existe
@@ -435,6 +767,9 @@ router.patch("/:trackingNumber", (req: Request, res: Response, next: NextFunctio
 router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { trackingNumber } = req.params;
+    if (req.query.recordSource === "archive") {
+      return next();
+    }
 
     const existing = get("SELECT tracking_number FROM shipments WHERE tracking_number = :t", { ":t": trackingNumber });
     if (!existing) {
@@ -446,6 +781,58 @@ router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFuncti
     run("DELETE FROM jobs WHERE tracking_number = :t", { ":t": trackingNumber });
 
     res.json({ ok: true, message: "Guía eliminada" });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { trackingNumber } = req.params;
+    const recordSource = req.query.recordSource === "archive" ? "archive" : "active";
+    if (recordSource !== "archive") {
+      return next();
+    }
+    if (recordSource === "archive") {
+      const existingArchived = get(
+        "SELECT tracking_number FROM shipments_archive WHERE tracking_number = :t",
+        { ":t": trackingNumber }
+      );
+      if (!existingArchived) {
+        return res.status(404).json({ error: "GuÃ­a no encontrada" });
+      }
+
+      run("DELETE FROM shipment_tracking WHERE tracking_number = :t", { ":t": trackingNumber });
+      run("DELETE FROM shipments_archive WHERE tracking_number = :t", { ":t": trackingNumber });
+      run("DELETE FROM jobs WHERE tracking_number = :t", { ":t": trackingNumber });
+
+      return res.json({ ok: true, message: "GuÃ­a eliminada" });
+    }
+  } catch (e) {
+    next(e);
+    return;
+  }
+});
+
+router.delete("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { trackingNumber } = req.params;
+    const recordSource = req.query.recordSource === "archive" ? "archive" : "active";
+    const sourceTable = recordSource === "archive" ? "shipments_archive" : "shipments";
+
+    const existing = get(
+      `SELECT tracking_number FROM ${sourceTable} WHERE tracking_number = :t`,
+      { ":t": trackingNumber }
+    );
+    if (!existing) {
+      return next();
+    }
+
+    run("DELETE FROM shipment_tracking WHERE tracking_number = :t", { ":t": trackingNumber });
+    run(`DELETE FROM ${sourceTable} WHERE tracking_number = :t`, { ":t": trackingNumber });
+    run("DELETE FROM jobs WHERE tracking_number = :t", { ":t": trackingNumber });
+
+    return res.json({ ok: true, message: "GuÃ­a eliminada" });
   } catch (e) {
     next(e);
   }
