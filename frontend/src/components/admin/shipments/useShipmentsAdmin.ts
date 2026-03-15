@@ -1,0 +1,323 @@
+import { useEffect, useState } from 'react';
+import {
+  deleteShipment,
+  getGestionSummary,
+  getManagements,
+  getShipments,
+  getStatuses,
+  getTrackingHistory,
+  loadGestiones,
+  updateShipmentTracking,
+} from '../../../services/api';
+import { getSession } from '../../../services/auth';
+import type {
+  CatalogItem,
+  GestionSummary,
+  Shipment,
+  ShipmentFilters,
+  TabMode,
+  TrackingRow,
+} from './types';
+
+const EMPTY_FILTERS: ShipmentFilters = {
+  zoneId: '',
+  managementId: '',
+  dateFrom: '',
+  dateTo: '',
+};
+
+export const useShipmentsAdmin = () => {
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  const [statuses, setStatuses] = useState<CatalogItem[]>([]);
+  const [managements, setManagements] = useState<CatalogItem[]>([]);
+
+  const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
+  const [activeTab, setActiveTab] = useState<TabMode>('open');
+
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<ShipmentFilters>(EMPTY_FILTERS);
+
+  const [editForm, setEditForm] = useState<Partial<Shipment>>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const [shipmentToDelete, setShipmentToDelete] = useState<Shipment | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [gestionSummary, setGestionSummary] = useState<GestionSummary>({
+    gestion_0: 0,
+    gestion_1: 0,
+    gestion_2: 0,
+    gestion_3: 0,
+  });
+  const [loadingGestiones, setLoadingGestiones] = useState(false);
+  const [gestionFilter, setGestionFilter] = useState<number | null>(null);
+  const [trackingHistory, setTrackingHistory] = useState<TrackingRow[]>([]);
+  const [trackingLastUpdated, setTrackingLastUpdated] = useState<string | null>(null);
+  const [loadingTracking, setLoadingTracking] = useState(false);
+
+  const fetchGestionSummary = async (scope: TabMode = activeTab) => {
+    try {
+      const data = await getGestionSummary(scope);
+      setGestionSummary(data);
+    } catch (error) {
+      console.error('Error fetching gestion summary', error);
+    }
+  };
+
+  const fetchCatalogs = async () => {
+    try {
+      const [statusesData, managementsData] = await Promise.all([getStatuses(), getManagements()]);
+      setStatuses(statusesData);
+      setManagements(managementsData);
+    } catch (error) {
+      console.error('Error catalogos', error);
+    }
+  };
+
+  const fetchShipments = async (
+    silent = false,
+    specificPage = page,
+    query = searchTerm,
+    currentFilters = filters,
+    scope = activeTab,
+  ) => {
+    if (!silent) {
+      setLoading(true);
+      setErrorMsg('');
+    }
+
+    try {
+      const data = await getShipments({
+        page: specificPage,
+        limit: 20,
+        scope,
+        search: query,
+        ...currentFilters,
+      });
+
+      setShipments(data.data || []);
+      fetchGestionSummary(scope);
+
+      if (data.pagination) {
+        setTotalPages(data.pagination.totalPages || 1);
+        setPage(data.pagination.page || 1);
+      }
+    } catch (error: any) {
+      console.error('Error al cargar guias', error);
+      if (!silent) setErrorMsg('Error cargando guias. Servidor no accesible.');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const fetchTrackingForModal = async (trackingNumber: string) => {
+    setLoadingTracking(true);
+    try {
+      const data = await getTrackingHistory(trackingNumber);
+      setTrackingHistory(data.flow || []);
+      setTrackingLastUpdated(data.last_updated);
+    } catch (error) {
+      console.error('Error fetching tracking history', error);
+      setTrackingHistory([]);
+      setTrackingLastUpdated(null);
+    } finally {
+      setLoadingTracking(false);
+    }
+  };
+
+  const openEdit = (shipment: Shipment) => {
+    setEditingShipment(shipment);
+    setEditForm({ ...shipment });
+  };
+
+  const openEditWithTracking = (shipment: Shipment) => {
+    openEdit(shipment);
+    fetchTrackingForModal(shipment.tracking_number);
+  };
+
+  const closeEdit = () => {
+    setEditingShipment(null);
+  };
+
+  const handleFormChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = event.target;
+    setEditForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const applyFilters = () => {
+    setPage(1);
+    fetchShipments(false, 1, searchTerm, filters);
+  };
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
+    fetchShipments(false, 1, searchTerm, EMPTY_FILTERS);
+  };
+
+  const search = () => {
+    setPage(1);
+    fetchShipments(false, 1, searchTerm, filters);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm('');
+    fetchShipments(false, 1, '', filters);
+  };
+
+  const changePage = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+      fetchShipments(false, newPage, searchTerm, filters);
+    }
+  };
+
+  const loadGestionData = async () => {
+    setLoadingGestiones(true);
+    try {
+      const result = await loadGestiones(true);
+      alert(`${result.message}`);
+      fetchShipments(false, page, searchTerm, filters);
+      fetchGestionSummary(activeTab);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al cargar gestiones');
+    } finally {
+      setLoadingGestiones(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!shipmentToDelete) return;
+
+    setDeleting(true);
+    try {
+      await deleteShipment(shipmentToDelete.tracking_number, shipmentToDelete.record_source || 'active');
+      setShipmentToDelete(null);
+      fetchShipments(false, page, searchTerm, filters);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const submitEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingShipment) return;
+
+    const isEditingStatusCerrado = statuses.find((status) => status.id === Number(editForm.status_id))?.name === 'Cerrado';
+    if (isEditingStatusCerrado && !editForm.checkout_date) {
+      setErrorMsg('Para marcar como "Cerrado" es obligatorio registrar la Fecha de Salida (Check-Out).');
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMsg('');
+
+    try {
+      const session = getSession();
+      const payload: any = {
+        ...editForm,
+        record_source: editingShipment.record_source || 'active',
+        newTrackingNumber: editForm.tracking_number,
+      };
+
+      if (isEditingStatusCerrado && !editingShipment.checkout_by && session) {
+        payload.checkout_by = session.id;
+      }
+
+      await updateShipmentTracking(editingShipment.tracking_number, payload);
+      closeEdit();
+      fetchShipments(false, page, searchTerm, filters);
+    } catch (error: any) {
+      setErrorMsg(error.response?.data?.error || 'Error al actualizar');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCatalogs();
+    fetchShipments(false, 1, '', EMPTY_FILTERS);
+  }, []);
+
+  useEffect(() => {
+    setGestionFilter(null);
+    fetchShipments(false, 1, searchTerm, filters, activeTab);
+    fetchGestionSummary(activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        fetchShipments(true, page, searchTerm, filters);
+      }, 10000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh, page, searchTerm, filters, activeTab]);
+
+  const visibleShipments = shipments.filter((shipment) => {
+    if (gestionFilter !== null) return (shipment.gestion_count ?? 0) === gestionFilter;
+    return true;
+  });
+
+  return {
+    activeTab,
+    applyFilters,
+    autoRefresh,
+    changePage,
+    clearFilters,
+    clearSearch,
+    closeEdit,
+    confirmDelete,
+    deleting,
+    editForm,
+    editingShipment,
+    errorMsg,
+    fetchShipments,
+    filters,
+    gestionFilter,
+    gestionSummary,
+    handleFormChange,
+    loadGestionData,
+    loading,
+    loadingGestiones,
+    loadingTracking,
+    managements,
+    openEditWithTracking,
+    page,
+    search,
+    searchTerm,
+    setActiveTab,
+    setAutoRefresh,
+    setFilters,
+    setGestionFilter,
+    setSearchTerm,
+    setShipmentToDelete,
+    shipmentToDelete,
+    shipments,
+    statuses,
+    submitEdit,
+    submitting,
+    totalPages,
+    trackingHistory,
+    trackingLastUpdated,
+    visibleShipments,
+  };
+};
+
+export { EMPTY_FILTERS };

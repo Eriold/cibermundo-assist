@@ -4,69 +4,22 @@
  */
 
 import { chromium, Browser, BrowserContext, Page } from "playwright";
-
-interface PaymentWebResponse {
-  Success: boolean;
-  Message?: string;
-  Guia?: {
-    FormasPago?: Array<{
-      IdFormaPago: number;
-      Descripcion: string;
-    }>;
-    ValorTotal: number;
-    ValorDeclarado: number;
-  };
-  TrazaGuia?: {
-    DescripcionEstadoGuia?: string;
-    Ciudad?: string;
-    FechaGrabacion?: string;
-  };
-}
+import {
+  PAYMENT_GUIDE_INPUT_SELECTOR,
+  PAYMENT_SHIPMENT_URL,
+} from "./payment-web-constants.js";
+import {
+  clearGuideInput,
+  registerPaymentPageDebug,
+  triggerSearch,
+  waitForPaymentResponse,
+} from "./payment-web-helpers.js";
+import type { PaymentWebResponse } from "./payment-web-types.js";
 
 class PaymentWebSingleton {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
-  private shipmentUrl = "https://www3.interrapidisimo.com/WebExterno/Consulta/Carga.aspx";
-
-  private async clearGuideInput(page: Page): Promise<void> {
-    await page.click("#inputGuide");
-    await page.keyboard.down("Control");
-    await page.keyboard.press("A");
-    await page.keyboard.up("Control");
-    await page.keyboard.press("Backspace");
-  }
-
-  private async triggerSearch(page: Page): Promise<void> {
-    const attempts: Array<() => Promise<void>> = [
-      async () => {
-        console.log("[PAYMENT_PW] Clicking #btnRastrear...");
-        await page.click("#btnRastrear", { timeout: 4000 });
-      },
-      async () => {
-        console.log("[PAYMENT_PW] Clicking .search-button a.right-button...");
-        await page.click(".search-button a.right-button", { timeout: 4000 });
-      },
-      async () => {
-        console.log("[PAYMENT_PW] Pressing Enter in #inputGuide...");
-        await page.press("#inputGuide", "Enter");
-      },
-    ];
-
-    let lastError: unknown = null;
-    for (const attempt of attempts) {
-      try {
-        await attempt();
-        return;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("Could not trigger shipment search");
-  }
 
   async init(): Promise<void> {
     if (this.browser) {
@@ -96,23 +49,7 @@ class PaymentWebSingleton {
     });
     
     this.page = await this.context.newPage();
-
-    // Listeners de debug para diagnosticar pantalla en blanco
-    this.page.on("console", (msg) => {
-      console.log(`[PAYMENT_PW][console] ${msg.type()}: ${msg.text()}`);
-    });
-    this.page.on("pageerror", (error) => {
-      console.log("[PAYMENT_PW][pageerror]", error);
-    });
-    this.page.on("requestfailed", (request) => {
-      const failure = request.failure();
-      console.log(
-        `[PAYMENT_PW][requestfailed] ${request.method()} ${request.url()} - ${failure?.errorText || "unknown"}`
-      );
-    });
-    this.page.on("framenavigated", (frame) => {
-      console.log(`[PAYMENT_PW][framenavigated] ${frame.url()}`);
-    });
+    registerPaymentPageDebug(this.page);
 
     // Configurar timeouts globales para conexiones lentas
     this.page.setDefaultTimeout(25000);
@@ -132,36 +69,29 @@ class PaymentWebSingleton {
         const currentUrl = page.url();
         if (!currentUrl.startsWith("https://www3.interrapidisimo.com/SiguetuEnvio/shipment")) {
           console.log(`[PAYMENT_PW] Navigating to shipment page (attempt ${attemptNum})...`);
-          await page.goto("https://www3.interrapidisimo.com/SiguetuEnvio/shipment", { waitUntil: "domcontentloaded" });
+          await page.goto(PAYMENT_SHIPMENT_URL, { waitUntil: "domcontentloaded" });
           await page.waitForTimeout(1000);
         }
 
-        console.log(`[PAYMENT_PW] Waiting for #inputGuide visible (attempt ${attemptNum})...`);
-        await page.waitForSelector("#inputGuide", { timeout: 15000 });
+        console.log(`[PAYMENT_PW] Waiting for ${PAYMENT_GUIDE_INPUT_SELECTOR} visible (attempt ${attemptNum})...`);
+        await page.waitForSelector(PAYMENT_GUIDE_INPUT_SELECTOR, { timeout: 15000 });
         await page.waitForTimeout(500);
 
-        console.log(`[PAYMENT_PW] Filling #inputGuide with ${trackingNumber}`);
-        await this.clearGuideInput(page);
-        await page.type("#inputGuide", trackingNumber, { delay: 30 });
+        console.log(`[PAYMENT_PW] Filling ${PAYMENT_GUIDE_INPUT_SELECTOR} with ${trackingNumber}`);
+        await clearGuideInput(page);
+        await page.type(PAYMENT_GUIDE_INPUT_SELECTOR, trackingNumber, { delay: 30 });
 
         console.log("[PAYMENT_PW] Waiting for API response...");
-        const waitForResponsePromise = page.waitForResponse(
-          (response: any) =>
-            response.url().includes("ObtenerRastreoGuiasClientePost") &&
-            response.request().method() === "POST" &&
-            response.status() === 200,
-          { timeout: 30000 }
-        );
+        const waitForResponsePromise = waitForPaymentResponse(page);
 
-        await this.triggerSearch(page);
+        await triggerSearch(page);
 
         try {
-          const response = await waitForResponsePromise;
-          const responseJson: PaymentWebResponse = await response.json();
+          const responseJson: PaymentWebResponse = await waitForResponsePromise;
           console.log(`[PAYMENT_PW] Got response Success=${responseJson.Success}`);
 
           try {
-            await this.clearGuideInput(page);
+            await clearGuideInput(page);
             console.log("[PAYMENT_PW] Input cleared for next request");
           } catch (cleanupError) {
             console.log("[PAYMENT_PW] Warning: Could not clear input:", cleanupError);
