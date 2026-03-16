@@ -123,9 +123,13 @@ const ShipmentsTab: React.FC = () => {
       )}
 
       <ShipmentsSearchHeader
+        activeTab={activeTab}
+        filters={filters}
+        gestionFilter={gestionFilter}
         loading={loading}
         page={page}
         searchTerm={searchTerm}
+        showOnlyTrackingFailures={showOnlyTrackingFailures}
         totalPages={totalPages}
         onChangeSearchTerm={setSearchTerm}
         onClearSearch={clearSearch}

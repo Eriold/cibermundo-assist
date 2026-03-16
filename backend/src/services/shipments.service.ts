@@ -14,7 +14,11 @@ export interface ShipmentListParams {
   dateTo?: string;
   checkoutDateFrom?: string;
   checkoutDateTo?: string;
+  gestionCount?: string;
+  onlyTrackingFailures?: boolean;
 }
+
+export type ShipmentReportType = "summary" | "detailed";
 
 export interface ShipmentUpdatePayload {
   newTrackingNumber?: string;
@@ -69,6 +73,21 @@ function buildShipmentFilters(params: Omit<ShipmentListParams, "page" | "limit" 
   if (params.checkoutDateTo) {
     clauses.push(`${alias}.checkout_date <= :checkoutDateTo`);
     sqlParams.checkoutDateTo = params.checkoutDateTo + "T23:59:59.999Z";
+  }
+
+  if (params.gestionCount !== undefined && params.gestionCount !== "") {
+    const gestionCount = parseInt(params.gestionCount, 10);
+    if (!isNaN(gestionCount) && gestionCount >= 0) {
+      clauses.push(`${alias}.gestion_count = :gestionCount`);
+      sqlParams.gestionCount = gestionCount;
+    }
+  }
+
+  if (params.onlyTrackingFailures) {
+    clauses.push(`${alias}.office_status = :trackingFailureStatus`);
+    clauses.push(`${alias}.api_message LIKE :trackingFailurePrefix`);
+    sqlParams.trackingFailureStatus = "ANOMALIA_DATOS";
+    sqlParams.trackingFailurePrefix = "FALLO_RASTREO_FINAL:%";
   }
 
   return {
@@ -126,6 +145,270 @@ function generateCSV(data: any[], headers: string[]): string {
   }
 
   return lines.join("\n");
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatCurrency(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const amount = Number(value);
+  if (Number.isNaN(amount)) {
+    return "";
+  }
+
+  return `$${amount.toLocaleString("es-CO")}`;
+}
+
+function escapeXml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function columnName(index: number) {
+  let current = index + 1;
+  let result = "";
+
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    current = Math.floor((current - 1) / 26);
+  }
+
+  return result;
+}
+
+function buildSheetXml(title: string, headers: string[], rows: string[][]) {
+  const titleRow = [
+    `<row r="1">`,
+    `<c r="A1" s="2" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c>`,
+    `</row>`,
+  ].join("");
+
+  const headerRow = [
+    `<row r="2">`,
+    ...headers.map((header, index) => (
+      `<c r="${columnName(index)}2" s="1" t="inlineStr"><is><t>${escapeXml(header)}</t></is></c>`
+    )),
+    `</row>`,
+  ].join("");
+
+  const dataRows = rows.map((row, rowIndex) => {
+    const rowNumber = rowIndex + 3;
+    const cells = row.map((cell, cellIndex) => (
+      `<c r="${columnName(cellIndex)}${rowNumber}" t="inlineStr"><is><t>${escapeXml(cell)}</t></is></c>`
+    )).join("");
+
+    return `<row r="${rowNumber}">${cells}</row>`;
+  }).join("");
+
+  const lastColumn = columnName(Math.max(headers.length - 1, 0));
+  const lastRow = Math.max(rows.length + 2, 2);
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="A1:${lastColumn}${lastRow}" />
+  <sheetViews>
+    <sheetView workbookViewId="0" />
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="15" />
+  <cols>
+    ${headers.map((_, index) => `<col min="${index + 1}" max="${index + 1}" width="22" customWidth="1" />`).join("")}
+  </cols>
+  <sheetData>
+    ${titleRow}
+    ${headerRow}
+    ${dataRows}
+  </sheetData>
+</worksheet>`;
+}
+
+function makeCrcTable() {
+  const table: number[] = [];
+
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+
+  return table;
+}
+
+const CRC_TABLE = makeCrcTable();
+
+function crc32(buffer: Buffer) {
+  let crc = 0xffffffff;
+
+  for (const byte of buffer) {
+    crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZip(files: Array<{ name: string; content: string }>) {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBuffer = Buffer.from(file.name, "utf8");
+    const dataBuffer = Buffer.from(file.content, "utf8");
+    const crc = crc32(dataBuffer);
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(0, 10);
+    localHeader.writeUInt16LE(0, 12);
+    localHeader.writeUInt32LE(crc, 14);
+    localHeader.writeUInt32LE(dataBuffer.length, 18);
+    localHeader.writeUInt32LE(dataBuffer.length, 22);
+    localHeader.writeUInt16LE(nameBuffer.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+
+    localParts.push(localHeader, nameBuffer, dataBuffer);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(0, 12);
+    centralHeader.writeUInt16LE(0, 14);
+    centralHeader.writeUInt32LE(crc, 16);
+    centralHeader.writeUInt32LE(dataBuffer.length, 20);
+    centralHeader.writeUInt32LE(dataBuffer.length, 24);
+    centralHeader.writeUInt16LE(nameBuffer.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+
+    centralParts.push(centralHeader, nameBuffer);
+    offset += localHeader.length + nameBuffer.length + dataBuffer.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const localDirectory = Buffer.concat(localParts);
+  const endRecord = Buffer.alloc(22);
+  endRecord.writeUInt32LE(0x06054b50, 0);
+  endRecord.writeUInt16LE(0, 4);
+  endRecord.writeUInt16LE(0, 6);
+  endRecord.writeUInt16LE(files.length, 8);
+  endRecord.writeUInt16LE(files.length, 10);
+  endRecord.writeUInt32LE(centralDirectory.length, 12);
+  endRecord.writeUInt32LE(localDirectory.length, 16);
+  endRecord.writeUInt16LE(0, 20);
+
+  return Buffer.concat([localDirectory, centralDirectory, endRecord]);
+}
+
+function generateExcelReport(title: string, headers: string[], rows: string[][]) {
+  const sheetXml = buildSheetXml(title, headers, rows);
+  const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Reporte" sheetId="1" r:id="rId1" />
+  </sheets>
+</workbook>`;
+  const workbookRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml" />
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml" />
+</Relationships>`;
+  const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml" />
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml" />
+</Relationships>`;
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
+  <Default Extension="xml" ContentType="application/xml" />
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml" />
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml" />
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml" />
+</Types>`;
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font>
+      <sz val="11" />
+      <name val="Calibri" />
+    </font>
+    <font>
+      <b />
+      <sz val="11" />
+      <color rgb="FFFFFFFF" />
+      <name val="Calibri" />
+    </font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none" /></fill>
+    <fill><patternFill patternType="gray125" /></fill>
+    <fill>
+      <patternFill patternType="solid">
+        <fgColor rgb="FF166534" />
+        <bgColor indexed="64" />
+      </patternFill>
+    </fill>
+  </fills>
+  <borders count="1">
+    <border>
+      <left /><right /><top /><bottom /><diagonal />
+    </border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" />
+  </cellStyleXfs>
+  <cellXfs count="3">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" />
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" />
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyFont="1">
+      <alignment horizontal="left" />
+    </xf>
+  </cellXfs>
+  <cellStyles count="1">
+    <cellStyle name="Normal" xfId="0" builtinId="0" />
+  </cellStyles>
+</styleSheet>`;
+  const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Microsoft Excel</Application>
+</Properties>`;
+
+  return createZip([
+    { name: "[Content_Types].xml", content: contentTypesXml },
+    { name: "_rels/.rels", content: rootRelsXml },
+    { name: "docProps/app.xml", content: appXml },
+    { name: "xl/workbook.xml", content: workbookXml },
+    { name: "xl/_rels/workbook.xml.rels", content: workbookRelsXml },
+    { name: "xl/styles.xml", content: stylesXml },
+    { name: "xl/worksheets/sheet1.xml", content: sheetXml },
+  ]);
 }
 
 function getClosedShipmentSelect(whereClause: string) {
@@ -250,6 +533,8 @@ export function listShipments(params: ShipmentListParams) {
     dateTo: params.dateTo,
     checkoutDateFrom: params.checkoutDateFrom,
     checkoutDateTo: params.checkoutDateTo,
+    gestionCount: params.gestionCount,
+    onlyTrackingFailures: params.onlyTrackingFailures,
   };
   const { whereClause, params: filterParams } = buildShipmentFilters(filterInput, "s");
 
@@ -393,6 +678,68 @@ export function exportShipments(params: {
   ];
 
   return generateCSV(rows, headers);
+}
+
+export function exportShipmentReport(params: Omit<ShipmentListParams, "page" | "limit"> & { type: ShipmentReportType }) {
+  const filterInput = {
+    search: params.search,
+    zoneId: params.zoneId,
+    managementId: params.managementId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    checkoutDateFrom: params.checkoutDateFrom,
+    checkoutDateTo: params.checkoutDateTo,
+    gestionCount: params.gestionCount,
+    onlyTrackingFailures: params.onlyTrackingFailures,
+  };
+  const { whereClause, params: filterParams } = buildShipmentFilters(filterInput, "s");
+
+  const rows = params.scope === "open"
+    ? all(
+        `SELECT s.tracking_number,
+                s.amount_total,
+                z.name as zone_name,
+                'Abierto' as report_status
+         FROM shipments s
+         LEFT JOIN zones z ON s.zone_id = z.id
+         LEFT JOIN statuses st ON s.status_id = st.id
+         WHERE ${whereClause}
+           AND (st.name != 'Cerrado' OR s.status_id IS NULL)
+         ORDER BY s.scanned_at DESC`,
+        filterParams
+      )
+    : all(
+        `SELECT base.tracking_number,
+                base.amount_total,
+                base.zone_name,
+                'Archivado/Cerrado' as report_status
+         FROM (${getClosedShipmentSelect(whereClause)}) base
+         ORDER BY base.scanned_at DESC`,
+        filterParams
+      );
+
+  const title = params.type === "detailed"
+    ? "Reporte detallado de guias"
+    : "Reporte de guias";
+
+  if (params.type === "detailed") {
+    return generateExcelReport(
+      title,
+      ["N Guia", "Zona", "Valor", "Estado"],
+      rows.map((row: any) => [
+        row.tracking_number || "",
+        row.zone_name || "Central",
+        formatCurrency(row.amount_total),
+        row.report_status || "",
+      ])
+    );
+  }
+
+  return generateExcelReport(
+    title,
+    ["N Guia"],
+    rows.map((row: any) => [row.tracking_number || ""])
+  );
 }
 
 export function enqueueGestionReload(forceReload: boolean) {

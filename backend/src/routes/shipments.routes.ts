@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import {
   deleteShipment,
   exportShipments,
+  exportShipmentReport,
   getGestionSummary,
   getJobsByTracking,
   getShipmentByTracking,
@@ -51,7 +52,7 @@ router.post("/retry-payment-failures", (_req: Request, res: Response, next: Next
 router.get("/:trackingNumber", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { trackingNumber } = req.params;
-    if (trackingNumber === "export" || trackingNumber === "gestion-summary") {
+    if (trackingNumber === "export" || trackingNumber === "gestion-summary" || trackingNumber === "report") {
       return next();
     }
 
@@ -61,6 +62,39 @@ router.get("/:trackingNumber", (req: Request, res: Response, next: NextFunction)
     }
 
     res.json(row);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/report", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const type = req.query.type === "detailed" ? "detailed" : "summary";
+    const scope = parseScope(req.query.scope);
+    const report = exportShipmentReport({
+      scope,
+      type,
+      search: req.query.search as string | undefined,
+      zoneId: req.query.zoneId as string | undefined,
+      managementId: req.query.managementId as string | undefined,
+      dateFrom: req.query.dateFrom as string | undefined,
+      dateTo: req.query.dateTo as string | undefined,
+      checkoutDateFrom: req.query.checkoutDateFrom as string | undefined,
+      checkoutDateTo: req.query.checkoutDateTo as string | undefined,
+      gestionCount: req.query.gestionCount as string | undefined,
+      onlyTrackingFailures: req.query.onlyTrackingFailures === "true",
+    });
+
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const year = now.getFullYear();
+    const fileDate = `${day}-${month}-${year}`;
+    const scopeLabel = scope === "open" ? "abiertas" : "archivadas-cerradas";
+    const typeLabel = type === "detailed" ? "detallado" : "simple";
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="reporte-${typeLabel}-${scopeLabel}-${fileDate}.xlsx"`);
+    res.send(report);
   } catch (e) {
     next(e);
   }
