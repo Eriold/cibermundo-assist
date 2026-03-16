@@ -49,7 +49,7 @@ const Scanner: React.FC = () => {
 
   useEffect(() => {
     const focusInput = () => {
-      if (inputRef.current) {
+      if (!duplicateModalOpen && inputRef.current) {
         inputRef.current.focus();
       }
     };
@@ -58,7 +58,7 @@ const Scanner: React.FC = () => {
     window.addEventListener('click', focusInput);
 
     return () => window.removeEventListener('click', focusInput);
-  }, []);
+  }, [duplicateModalOpen]);
 
   const handleZoneSelect = () => navigate('/location');
 
@@ -120,6 +120,14 @@ const Scanner: React.FC = () => {
 
   const handleForceSync = () => {
     syncPending();
+  };
+
+  const keepInputFocused = () => {
+    if (duplicateModalOpen) return;
+
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
   };
 
   return (
@@ -186,6 +194,7 @@ const Scanner: React.FC = () => {
               className="w-full bg-gray-50 dark:bg-black/20 border-2 border-gray-200 dark:border-gray-700 text-center text-2xl font-mono py-4 px-4 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 dark:text-white transition-all placeholder:text-gray-400 font-bold disabled:opacity-50"
               placeholder="Ej. 24004..."
               onKeyDown={handleKeyDown}
+              onBlur={keepInputFocused}
               disabled={isSubmitting}
               type="text"
               autoFocus
@@ -195,6 +204,7 @@ const Scanner: React.FC = () => {
 
           <button
             className="w-full bg-primary hover:bg-primary-dark text-black font-bold text-lg py-4 rounded-xl flex shadow-sm items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={handleManualSendBtn}
             disabled={isSubmitting}
           >
@@ -210,6 +220,7 @@ const Scanner: React.FC = () => {
               {pendingCount > 0 && (
                 <button
                   type="button"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={handleForceSync}
                   className="px-4 py-2 rounded-xl font-bold text-xs bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-800 dark:text-orange-300 transition-colors"
                 >
@@ -245,6 +256,7 @@ const Scanner: React.FC = () => {
             <div className="mt-6 flex justify-end">
               <button
                 type="button"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   setDuplicateModalOpen(false);
                   setDuplicateTracking('');
