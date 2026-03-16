@@ -58,6 +58,7 @@ const ShipmentsTab: React.FC = () => {
     trackingHistory,
     trackingLastUpdated,
     visibleShipments,
+    zones,
   } = useShipmentsAdmin();
 
   return (
@@ -114,6 +115,7 @@ const ShipmentsTab: React.FC = () => {
         <ShipmentsFiltersPanel
           filters={filters}
           managements={managements}
+          zones={zones}
           onApply={applyFilters}
           onChange={setFilters}
           onClear={clearFilters}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   deleteShipment,
+  getAllZones,
   getGestionSummary,
   getManagements,
   getShipments,
@@ -35,6 +36,7 @@ export const useShipmentsAdmin = () => {
 
   const [statuses, setStatuses] = useState<CatalogItem[]>([]);
   const [managements, setManagements] = useState<CatalogItem[]>([]);
+  const [zones, setZones] = useState<CatalogItem[]>([]);
 
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [activeTab, setActiveTab] = useState<TabMode>('open');
@@ -75,9 +77,14 @@ export const useShipmentsAdmin = () => {
 
   const fetchCatalogs = async () => {
     try {
-      const [statusesData, managementsData] = await Promise.all([getStatuses(), getManagements()]);
+      const [statusesData, managementsData, zonesResponse] = await Promise.all([
+        getStatuses(),
+        getManagements(),
+        getAllZones(),
+      ]);
       setStatuses(statusesData);
       setManagements(managementsData);
+      setZones(zonesResponse?.zones || []);
     } catch (error) {
       console.error('Error catalogos', error);
     }
@@ -345,6 +352,7 @@ export const useShipmentsAdmin = () => {
     trackingHistory,
     trackingLastUpdated,
     visibleShipments,
+    zones,
   };
 };
 

@@ -2,6 +2,7 @@ import type { CatalogItem, ShipmentFilters } from './types';
 
 interface ShipmentsFiltersPanelProps {
   filters: ShipmentFilters;
+  zones: CatalogItem[];
   managements: CatalogItem[];
   onApply: () => void;
   onChange: (filters: ShipmentFilters) => void;
@@ -10,6 +11,7 @@ interface ShipmentsFiltersPanelProps {
 
 const ShipmentsFiltersPanel = ({
   filters,
+  zones,
   managements,
   onApply,
   onChange,
@@ -19,13 +21,18 @@ const ShipmentsFiltersPanel = ({
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
       <div>
         <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Zona</label>
-        <input
-          type="number"
-          placeholder="ID de Zona"
+        <select
           value={filters.zoneId}
           onChange={(event) => onChange({ ...filters, zoneId: event.target.value })}
-          className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
-        />
+          className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary cursor-pointer"
+        >
+          <option value="">Todas las zonas</option>
+          {zones.map((zone) => (
+            <option key={zone.id} value={zone.id}>
+              {zone.name}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Gestion</label>
