@@ -1,73 +1,138 @@
-# React + TypeScript + Vite
+# Cibermundo Assist
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Monorepo para operar una oficina de Interrapidisimo con enfoque offline-first. El sistema permite registrar guias rapidamente, consultar su valor y estado, recuperar destinatario y gestiones desde APX, y administrar el historial operativo desde una interfaz web.
 
-Currently, two official plugins are available:
+## Objetivo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Este proyecto busca quitar el cuello de botella al recibir muchos paquetes en una oficina tipo franquicia o sucursal interna. La aplicacion permite:
 
-## React Compiler
+- registrar guias por lector o digitacion
+- saber quien registro cada paquete y en que zona quedo
+- consultar valor, estado, destinatario y flujo de gestiones
+- operar aun con intermitencia de red
+- administrar guias abiertas, cerradas y archivadas
+- dejar la base lista para futuras integraciones, como mensajeria por WhatsApp
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+## Arquitectura
 
-## Expanding the ESLint configuration
+El repositorio esta dividido en tres modulos principales:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. `backend`
+   API Express con SQLite. Recibe escaneos, guarda shipments, expone catalogos, usuarios, zonas, historial, detalle y operaciones administrativas.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+2. `frontend`
+   Aplicacion React + Vite. Incluye login, seleccion de zona, flujo de escaneo y panel administrativo con filtros, paginacion, modales y exportacion.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+3. `worker`
+   Proceso en background que atiende jobs. Consulta primero la web publica de Interrapidisimo para valor y estado del envio, y luego APX autenticado para destinatario, telefono y flujo de guia.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Flujo operativo
+
+Cuando se escanea una guia:
+
+1. el backend crea o actualiza el shipment
+2. se encola el job para consultar valor y estado
+3. el worker consulta la web publica
+4. luego se procesa APX para traer destinatario, telefono y flujo
+5. la informacion queda disponible en historial, tabla administrativa y modal de detalle
+
+## Caracteristicas principales
+
+- operacion offline-first en frontend usando IndexedDB con Dexie
+- login de usuarios y seleccion de zona
+- CRUD de usuarios, zonas, estados y gestiones
+- historial paginado con filtros por contexto operativo
+- exportacion CSV
+- separacion entre guias abiertas y archivadas/cerradas
+- calculo de conteos de gestiones `G0-G3`
+- recarga forzada de gestiones desde la UI
+- persistencia de flujo de guia y `gestion_count`
+- reapertura de guias archivadas si dejan de estar cerradas
+- eliminacion administrativa de guias activas o archivadas
+- modo local con datos fake cuando `ENABLE_APX_SCRAPER=false`
+
+## Estructura del repositorio
+
+```text
+adm-rep/
+|- backend/        # API, base de datos y logica de negocio
+|- frontend/       # Aplicacion React + Vite
+|- worker/         # Procesamiento de jobs y scraping
+|- _agent/         # Memoria del proyecto y documentacion de apoyo
+|- dist/           # Artefactos generados en raiz
+|- src/            # Archivos auxiliares en raiz
+|- .env
+|- .env.example
+|- package.json
+`- README.md
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Variables operativas importantes
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Worker / integraciones
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- `ENABLE_APX_SCRAPER=false|true`
+  - `false`: no entra a APX y permite trabajar localmente con datos mock
+  - `true`: habilita scraping autenticado para destinatario y gestiones
+- `HEADLESS=false|true`
+  - `false`: muestra navegador para depuracion
+  - `true`: ejecucion normal en segundo plano
+- `APX_URL`
+- `APX_USER`
+- `APX_PASS`
+- `APX_SCRAPE_DELAY_MS`
+- `PAYMENT_API_URL`
+
+## Desarrollo local
+
+Instalar dependencias del monorepo:
+
+```bash
+npm run install:all
 ```
+
+Levantar todo en modo desarrollo:
+
+```bash
+npm run dev
+```
+
+Levantar todo en modo start:
+
+```bash
+npm run start
+```
+
+Compilar todos los modulos:
+
+```bash
+npm run build:all
+```
+
+Tambien puedes ejecutar cada modulo por separado:
+
+```bash
+npm run dev:backend
+npm run dev:worker
+npm run dev:frontend
+```
+
+## Entornos recomendados
+
+### PC remoto / operacion real
+
+- `ENABLE_APX_SCRAPER=true`
+- `HEADLESS=true`
+
+### PC local de desarrollo
+
+- `ENABLE_APX_SCRAPER=false`
+- `HEADLESS=false` si necesitas ver el navegador
+
+Con esta configuracion local se puede trabajar UI, filtros, historial y pruebas operativas sin depender del acceso real a APX.
+
+## Notas
+
+- El `README` describe la idea general y la estructura actual del proyecto.
+- La memoria operativa mas detallada esta en `_agent/PROJECT_MEMORY.md`.
+- La carpeta `_agent/archived_otro_backend/` contiene contexto historico y no debe tomarse como fuente principal del estado actual.
