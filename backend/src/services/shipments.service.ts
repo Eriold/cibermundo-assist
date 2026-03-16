@@ -420,6 +420,60 @@ export function enqueueGestionReload(forceReload: boolean) {
   };
 }
 
+export function retryFailedPaymentJobs() {
+  const now = new Date().toISOString();
+  const candidates = all<{ tracking_number: string }>(
+    `SELECT s.tracking_number
+     FROM shipments s
+     LEFT JOIN statuses st ON s.status_id = st.id
+     WHERE (st.name != 'Cerrado' OR s.status_id IS NULL)
+       AND s.office_status = 'ANOMALIA_DATOS'
+       AND (s.payment_desc IS NULL OR s.amount_to_collect IS NULL OR s.api_success = 0)
+       AND s.api_message LIKE 'FALLO_RASTREO_FINAL:%'
+     ORDER BY s.scanned_at DESC`
+  );
+
+  let retriedCount = 0;
+
+  for (const ship of candidates) {
+    const activeJob = get<{ id: number }>(
+      `SELECT id FROM jobs
+       WHERE tracking_number = :trackingNumber
+         AND type = 'FETCH_PAYMENT_API'
+         AND status IN ('PENDING', 'RUNNING')
+       LIMIT 1`,
+      { ":trackingNumber": ship.tracking_number }
+    );
+
+    if (activeJob) {
+      continue;
+    }
+
+    run(
+      `INSERT INTO jobs (type, tracking_number, status, attempts, max_attempts, run_after, created_at, updated_at)
+       VALUES ('FETCH_PAYMENT_API', :trackingNumber, 'PENDING', 0, 4, :now, :now, :now)`,
+      { ":trackingNumber": ship.tracking_number, ":now": now }
+    );
+
+    run(
+      `UPDATE shipments
+       SET api_message = 'REINTENTO_RASTREO: Reencolado manualmente para nueva consulta.',
+           updated_at = :now
+       WHERE tracking_number = :trackingNumber`,
+      { ":trackingNumber": ship.tracking_number, ":now": now }
+    );
+
+    retriedCount++;
+  }
+
+  return {
+    ok: true,
+    message: `Se reencolaron ${retriedCount} guias con fallo definitivo de rastreo.`,
+    candidates: candidates.length,
+    jobs_created: retriedCount,
+  };
+}
+
 export function getGestionSummary(scope: Scope) {
   const rows = scope === "open"
     ? all<{ gestion_count: number; count: number }>(

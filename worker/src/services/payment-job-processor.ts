@@ -6,13 +6,34 @@ import {
   getEligiblePaymentJob,
 } from "./job-store.js";
 
-export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<boolean> {
+const PAYMENT_RETRY_DELAY_MS = 5000;
+const PAYMENT_MAX_ATTEMPTS = 4;
+
+function buildFinalTrackingFailureMessage(reason: string): string {
+  return `FALLO_RASTREO_FINAL: Fallos en obtener informacion despues de ${PAYMENT_MAX_ATTEMPTS} intentos. ${reason}`;
+}
+
+function markShipmentTrackingFailure(trackingNumber: string, message: string, now: string): void {
+  run(
+    `UPDATE shipments SET
+      office_status = 'ANOMALIA_DATOS',
+      api_message = ?,
+      api_success = 0,
+      api_last_fetch_at = ?,
+      updated_at = ?
+     WHERE tracking_number = ?`,
+    [message, now, now, trackingNumber] as any
+  );
+}
+
+export async function processOnePaymentJob(maxJobAttempts: number = PAYMENT_MAX_ATTEMPTS): Promise<boolean> {
   const now = new Date().toISOString();
   const job = getEligiblePaymentJob(now);
 
   if (!job) return false;
 
   const { id, tracking_number, attempts } = job;
+  const effectiveMaxAttempts = Math.min(maxJobAttempts, PAYMENT_MAX_ATTEMPTS);
   console.log(`[JOB] selected eligible id=${id} run_after=${job.run_after} now=${now}`);
 
   if (!claimJobRunning(id, now)) {
@@ -25,23 +46,7 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
     const apiData = await paymentWeb.fetch(tracking_number);
 
     if (!apiData.Success) {
-      const nowUpdate = new Date().toISOString();
-      run(
-        `UPDATE shipments SET
-          office_status = 'ANOMALIA_DATOS',
-          api_message = ?,
-          api_success = 0,
-          api_last_fetch_at = ?,
-          updated_at = ?
-         WHERE tracking_number = ?`,
-        [apiData.Message || "API returned Success=false", nowUpdate, nowUpdate, tracking_number] as any
-      );
-
-      run(`UPDATE jobs SET status = 'DONE', updated_at = ? WHERE id = ?`, [nowUpdate, id] as any);
-      saveDbImmediate();
-
-      console.log(`[JOB] done id=${id}`);
-      return true;
+      throw new Error(apiData.Message || "API returned Success=false");
     }
 
     if (!apiData.Guia || !apiData.TrazaGuia) {
@@ -70,6 +75,7 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
     const nowUpdate = new Date().toISOString();
     run(
       `UPDATE shipments SET
+        office_status = CASE WHEN office_status = 'ANOMALIA_DATOS' THEN 'PAQUETE_INGRESADO' ELSE office_status END,
         payment_code = ?,
         payment_desc = ?,
         amount_declared = ?,
@@ -79,7 +85,7 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
         api_current_city = ?,
         api_current_state_at = ?,
         api_success = 1,
-        api_message = ?,
+        api_message = NULL,
         api_last_fetch_at = ?,
         updated_at = ?
        WHERE tracking_number = ?`,
@@ -92,7 +98,6 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
         TrazaGuia.DescripcionEstadoGuia || "PENDIENTE",
         TrazaGuia.Ciudad || "",
         TrazaGuia.FechaGrabacion || nowUpdate,
-        apiData.Message || "OK",
         nowUpdate,
         nowUpdate,
         tracking_number,
@@ -109,7 +114,10 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
     const newAttempts = attempts + 1;
     const nowUpdate = new Date().toISOString();
 
-    if (newAttempts >= maxJobAttempts) {
+    if (newAttempts >= effectiveMaxAttempts) {
+      const finalMessage = buildFinalTrackingFailureMessage(errorMsg);
+      markShipmentTrackingFailure(tracking_number, finalMessage, nowUpdate);
+
       run(
         `UPDATE jobs SET
           status = 'FAILED',
@@ -117,14 +125,14 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
           last_error = ?,
           updated_at = ?
          WHERE id = ?`,
-        [newAttempts, `${errorMsg} (max retries reached)`, nowUpdate, id] as any
+        [newAttempts, finalMessage, nowUpdate, id] as any
       );
       saveDbImmediate();
       console.error(
-        `× [JOB] id=${id} tracking=${tracking_number} FAILED (attempt ${newAttempts}/${maxJobAttempts}): ${errorMsg}`
+        `x [JOB] id=${id} tracking=${tracking_number} FAILED (attempt ${newAttempts}/${effectiveMaxAttempts}): ${errorMsg}`
       );
     } else {
-      const nextRunAfter = new Date(Date.now() + 30000).toISOString();
+      const nextRunAfter = new Date(Date.now() + PAYMENT_RETRY_DELAY_MS).toISOString();
       run(
         `UPDATE jobs SET
           status = 'PENDING',
@@ -137,7 +145,7 @@ export async function processOnePaymentJob(maxJobAttempts: number = 3): Promise<
       );
       saveDbImmediate();
       console.error(
-        `× [JOB] id=${id} tracking=${tracking_number} RETRY (attempt ${newAttempts}/${maxJobAttempts}): ${errorMsg}`
+        `x [JOB] id=${id} tracking=${tracking_number} RETRY (attempt ${newAttempts}/${effectiveMaxAttempts}): ${errorMsg}`
       );
     }
 

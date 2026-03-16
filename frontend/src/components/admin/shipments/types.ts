@@ -6,6 +6,8 @@ export interface Shipment {
   scanned_by: string;
   delivery_type: string;
   office_status: string;
+  api_success?: number;
+  api_message?: string | null;
   zone_name?: string;
   zone_id?: number | null;
   api_current_state_desc?: string;

@@ -9,6 +9,7 @@ import {
   listShipments,
   type Scope,
   enqueueGestionReload,
+  retryFailedPaymentJobs,
   updateShipment,
 } from "../services/shipments.service.js";
 
@@ -32,6 +33,14 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
     });
 
     res.json(result);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/retry-payment-failures", (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(retryFailedPaymentJobs());
   } catch (e) {
     next(e);
   }

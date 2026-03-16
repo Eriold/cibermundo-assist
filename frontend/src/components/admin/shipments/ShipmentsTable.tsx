@@ -124,6 +124,11 @@ const ShipmentsTable = ({
                     <td className="p-4 text-sm font-medium text-gray-600 dark:text-gray-300">
                       {shipment.payment_desc ? (
                         <span className="text-sm font-bold text-gray-900 dark:text-white">${shipment.amount_total?.toLocaleString()}</span>
+                      ) : shipment.office_status === 'ANOMALIA_DATOS' && (shipment.api_message || '').startsWith('FALLO_RASTREO_FINAL:') ? (
+                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-bold">
+                          <span className="material-symbols-outlined text-[16px]">warning</span>
+                          Sin rastreo
+                        </span>
                       ) : (
                         <span className="text-gray-400 italic flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>

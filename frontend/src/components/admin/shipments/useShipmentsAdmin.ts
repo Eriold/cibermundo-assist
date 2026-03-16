@@ -7,6 +7,7 @@ import {
   getStatuses,
   getTrackingHistory,
   loadGestiones,
+  retryPaymentFailures,
   updateShipmentTracking,
 } from '../../../services/api';
 import { getSession } from '../../../services/auth';
@@ -60,6 +61,8 @@ export const useShipmentsAdmin = () => {
   const [trackingHistory, setTrackingHistory] = useState<TrackingRow[]>([]);
   const [trackingLastUpdated, setTrackingLastUpdated] = useState<string | null>(null);
   const [loadingTracking, setLoadingTracking] = useState(false);
+  const [showOnlyTrackingFailures, setShowOnlyTrackingFailures] = useState(false);
+  const [retryingTrackingFailures, setRetryingTrackingFailures] = useState(false);
 
   const fetchGestionSummary = async (scope: TabMode = activeTab) => {
     try {
@@ -195,6 +198,19 @@ export const useShipmentsAdmin = () => {
     }
   };
 
+  const retryTrackingFailures = async () => {
+    setRetryingTrackingFailures(true);
+    try {
+      const result = await retryPaymentFailures();
+      alert(result.message);
+      fetchShipments(false, page, searchTerm, filters);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al reintentar fallos de rastreo');
+    } finally {
+      setRetryingTrackingFailures(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!shipmentToDelete) return;
 
@@ -270,10 +286,17 @@ export const useShipmentsAdmin = () => {
     };
   }, [autoRefresh, page, searchTerm, filters, activeTab]);
 
+  const isTrackingFailure = (shipment: Shipment) =>
+    shipment.office_status === 'ANOMALIA_DATOS' &&
+    (shipment.api_message || '').startsWith('FALLO_RASTREO_FINAL:');
+
   const visibleShipments = shipments.filter((shipment) => {
+    if (showOnlyTrackingFailures && !isTrackingFailure(shipment)) return false;
     if (gestionFilter !== null) return (shipment.gestion_count ?? 0) === gestionFilter;
     return true;
   });
+
+  const trackingFailuresCount = shipments.filter(isTrackingFailure).length;
 
   return {
     activeTab,
@@ -300,6 +323,8 @@ export const useShipmentsAdmin = () => {
     managements,
     openEditWithTracking,
     page,
+    retryTrackingFailures,
+    retryingTrackingFailures,
     search,
     searchTerm,
     setActiveTab,
@@ -308,12 +333,15 @@ export const useShipmentsAdmin = () => {
     setGestionFilter,
     setSearchTerm,
     setShipmentToDelete,
+    setShowOnlyTrackingFailures,
     shipmentToDelete,
     shipments,
+    showOnlyTrackingFailures,
     statuses,
     submitEdit,
     submitting,
     totalPages,
+    trackingFailuresCount,
     trackingHistory,
     trackingLastUpdated,
     visibleShipments,

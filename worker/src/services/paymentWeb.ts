@@ -21,6 +21,29 @@ class PaymentWebSingleton {
   private context: BrowserContext | null = null;
   private page: Page | null = null;
 
+  private async createPage(): Promise<Page> {
+    if (!this.context) {
+      throw new Error("Browser context not initialized");
+    }
+
+    const page = await this.context.newPage();
+    registerPaymentPageDebug(page);
+    page.setDefaultTimeout(25000);
+    page.setDefaultNavigationTimeout(45000);
+    return page;
+  }
+
+  private async resetPage(): Promise<Page> {
+    if (this.page) {
+      try {
+        await this.page.close();
+      } catch {}
+    }
+
+    this.page = await this.createPage();
+    return this.page;
+  }
+
   async init(): Promise<void> {
     if (this.browser) {
       console.log("[PAYMENT_PW] Browser already initialized, skipping init");
@@ -47,13 +70,8 @@ class PaymentWebSingleton {
       viewport: { width: 1280, height: 720 },
       javaScriptEnabled: true
     });
-    
-    this.page = await this.context.newPage();
-    registerPaymentPageDebug(this.page);
 
-    // Configurar timeouts globales para conexiones lentas
-    this.page.setDefaultTimeout(25000);
-    this.page.setDefaultNavigationTimeout(45000);
+    this.page = await this.createPage();
 
     console.log("[PAYMENT_PW] Browser initialized with stealth settings");
   }
@@ -103,11 +121,23 @@ class PaymentWebSingleton {
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
+        const currentUrl = page.url();
         console.log(`[PAYMENT_PW] Attempt ${attemptNum} failed: ${errorMsg}`);
 
         if (attemptNum === 1) {
+          const shouldResetPage =
+            errorMsg.includes("ERR_CONNECTION_CLOSED") ||
+            currentUrl.startsWith("chrome-error://");
+
+          if (shouldResetPage) {
+            console.log("[PAYMENT_PW] Resetting broken page before retry...");
+            await this.resetPage();
+          } else {
+            console.log("[PAYMENT_PW] Reloading page before retry...");
+            await page.reload({ waitUntil: "domcontentloaded" });
+          }
+
           console.log("[PAYMENT_PW] Retrying fetch...");
-          await page.reload({ waitUntil: "domcontentloaded" });
           return attemptFetch(2);
         }
 

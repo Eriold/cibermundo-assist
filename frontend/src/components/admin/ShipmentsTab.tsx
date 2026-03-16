@@ -36,6 +36,8 @@ const ShipmentsTab: React.FC = () => {
     managements,
     openEditWithTracking,
     page,
+    retryTrackingFailures,
+    retryingTrackingFailures,
     search,
     searchTerm,
     setActiveTab,
@@ -44,12 +46,15 @@ const ShipmentsTab: React.FC = () => {
     setGestionFilter,
     setSearchTerm,
     setShipmentToDelete,
+    setShowOnlyTrackingFailures,
     shipmentToDelete,
+    showOnlyTrackingFailures,
     shipments,
     statuses,
     submitEdit,
     submitting,
     totalPages,
+    trackingFailuresCount,
     trackingHistory,
     trackingLastUpdated,
     visibleShipments,
@@ -74,6 +79,34 @@ const ShipmentsTab: React.FC = () => {
         <div className="bg-red-500 text-white p-4 rounded-xl shadow-md mb-4 flex items-center gap-2 shrink-0">
           <span className="material-symbols-outlined">error</span>
           <p className="font-bold text-sm">{errorMsg}</p>
+        </div>
+      )}
+
+      {activeTab === 'open' && trackingFailuresCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-xl shadow-sm mb-4 flex items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined">warning</span>
+            <p className="font-bold text-sm">
+              Fallos en obtener informacion: {trackingFailuresCount} guia(s) no pudieron rastrearse despues de 4 intentos.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowOnlyTrackingFailures(!showOnlyTrackingFailures)}
+              className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${showOnlyTrackingFailures ? 'bg-amber-900 text-white' : 'bg-amber-100 hover:bg-amber-200 text-amber-900'}`}
+            >
+              {showOnlyTrackingFailures ? 'Ver Todas' : 'Solo Fallos'}
+            </button>
+            <button
+              type="button"
+              onClick={retryTrackingFailures}
+              disabled={retryingTrackingFailures}
+              className="px-4 py-2 rounded-xl font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
+            >
+              {retryingTrackingFailures ? 'Reintentando...' : 'Reintentar Fallos'}
+            </button>
+          </div>
         </div>
       )}
 

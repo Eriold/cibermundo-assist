@@ -168,6 +168,11 @@ export const loadGestiones = async (force = false) => {
   return res.data;
 };
 
+export const retryPaymentFailures = async () => {
+  const res = await api.post('/shipments/retry-payment-failures');
+  return res.data;
+};
+
 export const getTrackingHistory = async (trackingNumber: string) => {
   const res = await api.get(`/shipments/${trackingNumber}/tracking`);
   return res.data;
