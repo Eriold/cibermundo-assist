@@ -58,7 +58,7 @@ export function useSync() {
       try {
         await trySyncScan(id);
       } catch (err: any) {
-        if (err.response?.status === 400) {
+        if (err.response?.status === 400 || err.response?.status === 409) {
           throw err;
         }
       }
@@ -86,16 +86,16 @@ export function useSync() {
       console.warn("Fallo sync individual:", err);
       const attempts = (scan.sync_attempts || 0) + 1;
       // Si falla demasiadas veces, marcar como FAILED para romper loops infinitos
-      // O si es un error 400 (Bad Request), marcar de inmediato como fallido ya que no se va a arreglar solo
-      const isBadRequest = err.response?.status === 400;
+      // O si es un error terminal (400/409), marcar de inmediato como fallido ya que no se va a arreglar solo
+      const isTerminalRequest = err.response?.status === 400 || err.response?.status === 409;
 
       await db.scans.update(id, { 
         sync_attempts: attempts,
-        status: (attempts >= 5 || isBadRequest) ? 'ERROR' : 'PENDING',
+        status: (attempts >= 5 || isTerminalRequest) ? 'ERROR' : 'PENDING',
         error_message: err.message || "Error desconocido"
       });
       
-      if (isBadRequest) throw err;
+      if (isTerminalRequest) throw err;
     }
   };
 

@@ -86,33 +86,33 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
     const now = new Date().toISOString();
     const status = officeStatus || "PAQUETE_INGRESADO";
 
-    // Verificar si tracking ya existe
+    // Verificar si tracking ya existe en activas
     const existing = get<{ tracking_number: string; scanned_by: string }>(
       "SELECT tracking_number, scanned_by FROM shipments WHERE tracking_number = :trackingNumber",
       { ":trackingNumber": trackingNumber }
     );
 
     if (existing) {
-      // Actualizar: update updated_at y opcionalmente scanned_by
-      run(
-        `UPDATE shipments SET 
-          updated_at = :now,
-          scanned_by = :scannedBy,
-          office_status = :status
-        WHERE tracking_number = :trackingNumber`,
-        {
-          ":now": now,
-          ":scannedBy": scannedBy,
-          ":status": status,
-          ":trackingNumber": trackingNumber,
-        }
-      );
-
-      return res.json({
-        ok: true,
+      return res.status(409).json({
+        error: "Esta guía ya existe",
         trackingNumber,
-        action: "updated",
-        message: "Shipment already existed, updated",
+        existingSource: "active",
+        message: "La guía ya existe en el registro activo",
+      });
+    }
+
+    // Verificar si tracking ya existe en archivadas
+    const existingArchived = get<{ tracking_number: string }>(
+      "SELECT tracking_number FROM shipments_archive WHERE tracking_number = :trackingNumber",
+      { ":trackingNumber": trackingNumber }
+    );
+
+    if (existingArchived) {
+      return res.status(409).json({
+        error: "Esta guía ya existe",
+        trackingNumber,
+        existingSource: "archive",
+        message: "La guía ya existe en el histórico archivado",
       });
     }
 
