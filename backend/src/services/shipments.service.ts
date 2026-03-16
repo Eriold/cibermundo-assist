@@ -1111,3 +1111,20 @@ export function deleteShipment(trackingNumber: string, recordSource: RecordSourc
 
   return { ok: true, message: "Guia eliminada" };
 }
+
+export function deleteManyShipments(items: Array<{ trackingNumber: string; recordSource: RecordSource }>) {
+  let deletedCount = 0;
+
+  for (const item of items) {
+    const deleted = deleteShipment(item.trackingNumber, item.recordSource);
+    if (deleted) {
+      deletedCount += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    deletedCount,
+    message: deletedCount === 1 ? "Se elimino 1 guia" : `Se eliminaron ${deletedCount} guias`,
+  };
+}

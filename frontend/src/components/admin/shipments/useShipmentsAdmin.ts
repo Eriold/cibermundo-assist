@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   deleteShipment,
+  deleteShipmentsBulk,
   getAllZones,
   getGestionSummary,
   getManagements,
@@ -30,6 +31,8 @@ const EMPTY_FILTERS: ShipmentFilters = {
   checkoutDateTo: '',
 };
 
+const getShipmentSelectionKey = (shipment: Shipment) => `${shipment.record_source || 'active'}:${shipment.tracking_number}`;
+
 export const useShipmentsAdmin = () => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +56,8 @@ export const useShipmentsAdmin = () => {
 
   const [shipmentToDelete, setShipmentToDelete] = useState<Shipment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selectedShipmentKeys, setSelectedShipmentKeys] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [gestionSummary, setGestionSummary] = useState<GestionSummary>({
     gestion_0: 0,
@@ -114,6 +119,7 @@ export const useShipmentsAdmin = () => {
       });
 
       setShipments(data.data || []);
+      setSelectedShipmentKeys([]);
       fetchGestionSummary(scope);
 
       if (data.pagination) {
@@ -305,16 +311,72 @@ export const useShipmentsAdmin = () => {
     return true;
   });
 
+  useEffect(() => {
+    const visibleKeys = visibleShipments.map(getShipmentSelectionKey);
+    setSelectedShipmentKeys((current) => current.filter((key) => visibleKeys.includes(key)));
+  }, [visibleShipments]);
+
+  const toggleShipmentSelection = (shipment: Shipment) => {
+    const key = getShipmentSelectionKey(shipment);
+    setSelectedShipmentKeys((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleKeys = visibleShipments.map(getShipmentSelectionKey);
+    const allSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedShipmentKeys.includes(key));
+
+    setSelectedShipmentKeys((current) => {
+      if (allSelected) {
+        return current.filter((key) => !visibleKeys.includes(key));
+      }
+
+      return Array.from(new Set([...current, ...visibleKeys]));
+    });
+  };
+
+  const clearSelectedShipments = () => {
+    setSelectedShipmentKeys([]);
+  };
+
+  const selectedShipments = visibleShipments.filter((shipment) => selectedShipmentKeys.includes(getShipmentSelectionKey(shipment)));
+  const selectedShipmentsCount = selectedShipments.length;
+  const allVisibleSelected = visibleShipments.length > 0 && visibleShipments.every((shipment) => selectedShipmentKeys.includes(getShipmentSelectionKey(shipment)));
   const trackingFailuresCount = shipments.filter(isTrackingFailure).length;
+
+  const confirmBulkDelete = async () => {
+    if (selectedShipments.length === 0) return;
+
+    setBulkDeleting(true);
+    try {
+      await deleteShipmentsBulk(
+        selectedShipments.map((shipment) => ({
+          trackingNumber: shipment.tracking_number,
+          recordSource: shipment.record_source || 'active',
+        }))
+      );
+      setSelectedShipmentKeys([]);
+      fetchShipments(false, page, searchTerm, filters);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al eliminar guias');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   return {
     activeTab,
+    allVisibleSelected,
     applyFilters,
     autoRefresh,
+    bulkDeleting,
     changePage,
     clearFilters,
     clearSearch,
+    clearSelectedShipments,
     closeEdit,
+    confirmBulkDelete,
     confirmDelete,
     deleting,
     editForm,
@@ -336,6 +398,8 @@ export const useShipmentsAdmin = () => {
     retryingTrackingFailures,
     search,
     searchTerm,
+    selectedShipmentKeys,
+    selectedShipmentsCount,
     setActiveTab,
     setAutoRefresh,
     setFilters,
@@ -349,6 +413,8 @@ export const useShipmentsAdmin = () => {
     statuses,
     submitEdit,
     submitting,
+    toggleSelectAllVisible,
+    toggleShipmentSelection,
     totalPages,
     trackingFailuresCount,
     trackingHistory,

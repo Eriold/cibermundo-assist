@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import BulkDeleteShipmentsModal from './shipments/BulkDeleteShipmentsModal';
 import DeleteShipmentModal from './shipments/DeleteShipmentModal';
 import EditShipmentModal from './shipments/EditShipmentModal';
 import ShipmentsFiltersPanel from './shipments/ShipmentsFiltersPanel';
@@ -11,14 +12,19 @@ const ShipmentsTab: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const {
     activeTab,
+    allVisibleSelected,
     applyFilters,
     autoRefresh,
+    bulkDeleting,
     changePage,
     clearFilters,
     clearSearch,
+    clearSelectedShipments,
     closeEdit,
+    confirmBulkDelete,
     confirmDelete,
     deleting,
     editForm,
@@ -40,6 +46,8 @@ const ShipmentsTab: React.FC = () => {
     retryingTrackingFailures,
     search,
     searchTerm,
+    selectedShipmentKeys,
+    selectedShipmentsCount,
     setActiveTab,
     setAutoRefresh,
     setFilters,
@@ -53,6 +61,8 @@ const ShipmentsTab: React.FC = () => {
     statuses,
     submitEdit,
     submitting,
+    toggleSelectAllVisible,
+    toggleShipmentSelection,
     totalPages,
     trackingFailuresCount,
     trackingHistory,
@@ -138,6 +148,7 @@ const ShipmentsTab: React.FC = () => {
       />
 
       <ShipmentsTable
+        allVisibleSelected={allVisibleSelected}
         filters={filters}
         gestionFilter={gestionFilter}
         gestionSummary={gestionSummary}
@@ -151,10 +162,37 @@ const ShipmentsTab: React.FC = () => {
           setShowEditModal(true);
         }}
         onToggleGestionFilter={(value) => setGestionFilter(gestionFilter === value ? null : value)}
+        onToggleSelectAllVisible={toggleSelectAllVisible}
+        onToggleShipmentSelection={toggleShipmentSelection}
         searchTerm={searchTerm}
+        selectedShipmentKeys={selectedShipmentKeys}
         shipments={shipments}
         visibleShipments={visibleShipments}
       />
+
+      <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-1">
+        <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
+          Seleccionadas: {selectedShipmentsCount}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={clearSelectedShipments}
+            disabled={selectedShipmentsCount === 0}
+            className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50"
+          >
+            Limpiar Seleccion
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowBulkDeleteModal(true)}
+            disabled={selectedShipmentsCount === 0}
+            className="px-4 py-2 rounded-xl font-bold text-sm bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
+          >
+            Eliminar Seleccionadas
+          </button>
+        </div>
+      </div>
 
       {showEditModal && (
         <EditShipmentModal
@@ -188,6 +226,18 @@ const ShipmentsTab: React.FC = () => {
           onConfirm={async () => {
             await confirmDelete();
             setShowDeleteModal(false);
+          }}
+        />
+      )}
+
+      {showBulkDeleteModal && selectedShipmentsCount > 0 && (
+        <BulkDeleteShipmentsModal
+          count={selectedShipmentsCount}
+          deleting={bulkDeleting}
+          onCancel={() => setShowBulkDeleteModal(false)}
+          onConfirm={async () => {
+            await confirmBulkDelete();
+            setShowBulkDeleteModal(false);
           }}
         />
       )}

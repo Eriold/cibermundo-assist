@@ -44,6 +44,11 @@ export const deleteShipment = async (trackingNumber: string, recordSource: 'acti
   return res.data;
 };
 
+export const deleteShipmentsBulk = async (items: Array<{ trackingNumber: string; recordSource: 'active' | 'archive' }>) => {
+  const res = await api.post('/shipments/bulk-delete', { items });
+  return res.data;
+};
+
 /**
  * Chequea la salud del API general
  */

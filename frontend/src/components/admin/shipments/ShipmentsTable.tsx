@@ -2,6 +2,7 @@ import type { GestionSummary, Shipment, ShipmentFilters } from './types';
 import { formatDate, getGestionBadge } from './utils';
 
 interface ShipmentsTableProps {
+  allVisibleSelected: boolean;
   filters: ShipmentFilters;
   gestionFilter: number | null;
   gestionSummary: GestionSummary;
@@ -9,7 +10,10 @@ interface ShipmentsTableProps {
   onDelete: (shipment: Shipment) => void;
   onOpenEdit: (shipment: Shipment) => void;
   onToggleGestionFilter: (value: number) => void;
+  onToggleSelectAllVisible: () => void;
+  onToggleShipmentSelection: (shipment: Shipment) => void;
   searchTerm: string;
+  selectedShipmentKeys: string[];
   shipments: Shipment[];
   visibleShipments: Shipment[];
 }
@@ -33,7 +37,10 @@ const buildExportUrl = (searchTerm: string, filters: ShipmentFilters) => {
   return `${import.meta.env.VITE_API_URL || 'http://localhost:3333'}/shipments/export?${params.toString()}`;
 };
 
+const getShipmentSelectionKey = (shipment: Shipment) => `${shipment.record_source || 'active'}:${shipment.tracking_number}`;
+
 const ShipmentsTable = ({
+  allVisibleSelected,
   filters,
   gestionFilter,
   gestionSummary,
@@ -41,7 +48,10 @@ const ShipmentsTable = ({
   onDelete,
   onOpenEdit,
   onToggleGestionFilter,
+  onToggleSelectAllVisible,
+  onToggleShipmentSelection,
   searchTerm,
+  selectedShipmentKeys,
   shipments,
   visibleShipments,
 }: ShipmentsTableProps) => {
@@ -53,13 +63,23 @@ const ShipmentsTable = ({
         <table className="w-full text-left border-collapse min-w-[1000px] h-max">
           <thead className="sticky top-0 bg-gray-50 dark:bg-[#2c2b1f] border-b border-gray-200 dark:border-white/10 z-10 shadow-sm">
             <tr>
-              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">N° Guía</th>
+              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">
+                <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={onToggleSelectAllVisible}
+                    className="size-4 rounded border-gray-300 text-red-500 focus:ring-red-500"
+                  />
+                  <span>N Guia</span>
+                </label>
+              </th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Zona</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Fecha Ingreso</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Cliente</th>
-              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Teléfono</th>
+              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Telefono</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Valor</th>
-              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-center">Gestión</th>
+              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-center">Gestion</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-right">Acciones</th>
             </tr>
           </thead>
@@ -78,18 +98,25 @@ const ShipmentsTable = ({
                 <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
                   <div className="flex flex-col items-center justify-center">
                     <span className="material-symbols-outlined text-4xl mb-2 opacity-50">inbox</span>
-                    <p className="font-bold">No hay guías registradas en este apartado.</p>
+                    <p className="font-bold">No hay guias registradas en este apartado.</p>
                   </div>
                 </td>
               </tr>
             ) : (
               visibleShipments.map((shipment, index) => {
                 const badge = getGestionBadge(shipment.gestion_count);
+                const isSelected = selectedShipmentKeys.includes(getShipmentSelectionKey(shipment));
 
                 return (
                   <tr key={shipment.tracking_number + index} className={`hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors ${badge.border}`}>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => onToggleShipmentSelection(shipment)}
+                          className="size-4 rounded border-gray-300 text-red-500 focus:ring-red-500 shrink-0"
+                        />
                         <div className="size-10 rounded-full bg-primary-light/20 text-primary flex items-center justify-center shrink-0">
                           <span className="material-symbols-outlined text-[20px]">package</span>
                         </div>
@@ -153,14 +180,14 @@ const ShipmentsTable = ({
                         <button
                           onClick={() => onOpenEdit(shipment)}
                           className="size-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 flex items-center justify-center transition-colors"
-                          title="Editar Guía"
+                          title="Editar Guia"
                         >
                           <span className="material-symbols-outlined text-[18px]">edit</span>
                         </button>
                         <button
                           onClick={() => onDelete(shipment)}
                           className="size-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center transition-colors"
-                          title="Eliminar Guía"
+                          title="Eliminar Guia"
                         >
                           <span className="material-symbols-outlined text-[18px]">delete</span>
                         </button>

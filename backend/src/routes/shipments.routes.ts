@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import {
   deleteShipment,
+  deleteManyShipments,
   exportShipments,
   exportShipmentReport,
   getGestionSummary,
@@ -44,6 +45,25 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
 router.post("/retry-payment-failures", (_req: Request, res: Response, next: NextFunction) => {
   try {
     res.json(retryFailedPaymentJobs());
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/bulk-delete", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const validItems = items.filter((item: any) =>
+      item &&
+      typeof item.trackingNumber === "string" &&
+      (item.recordSource === "active" || item.recordSource === "archive")
+    );
+
+    if (validItems.length === 0) {
+      return res.status(400).json({ error: "No hay guias validas para eliminar" });
+    }
+
+    res.json(deleteManyShipments(validItems));
   } catch (e) {
     next(e);
   }
