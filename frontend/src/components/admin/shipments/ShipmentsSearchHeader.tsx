@@ -25,7 +25,7 @@ const ShipmentsSearchHeader = ({
         <span className="material-symbols-outlined text-gray-400">search</span>
         <input
           type="text"
-          placeholder="Buscar por numero de guia..."
+          placeholder="Buscar por guia o telefono..."
           value={searchTerm}
           onChange={(event) => onChangeSearchTerm(event.target.value)}
           onKeyDown={(event) => {

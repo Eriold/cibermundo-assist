@@ -27,7 +27,11 @@ function buildShipmentFilters(params: Omit<ShipmentListParams, "page" | "limit" 
   const sqlParams: Record<string, any> = {};
 
   if (params.search) {
-    clauses.push(`${alias}.tracking_number LIKE :search`);
+    clauses.push(`(
+      ${alias}.tracking_number LIKE :search
+      OR ${alias}.recipient_phone LIKE :search
+      OR ${alias}.client_phone LIKE :search
+    )`);
     sqlParams.search = `%${params.search}%`;
   }
 
