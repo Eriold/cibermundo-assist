@@ -314,7 +314,7 @@ export const useShipmentsAdmin = () => {
   useEffect(() => {
     const visibleKeys = visibleShipments.map(getShipmentSelectionKey);
     setSelectedShipmentKeys((current) => current.filter((key) => visibleKeys.includes(key)));
-  }, [visibleShipments]);
+  }, [shipments, showOnlyTrackingFailures, gestionFilter]);
 
   const toggleShipmentSelection = (shipment: Shipment) => {
     const key = getShipmentSelectionKey(shipment);
