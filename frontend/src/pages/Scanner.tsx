@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ScannerModal from '../components/ScannerModal';
 import { getActiveZone, getSession } from '../services/auth';
 import type { UserSession } from '../services/auth';
 import { useSync } from '../services/useSync';
@@ -8,7 +7,6 @@ import { useSync } from '../services/useSync';
 const Scanner: React.FC = () => {
   const navigate = useNavigate();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [result, setResult] = useState<string>('');
   const [showBanner, setShowBanner] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,7 +33,6 @@ const Scanner: React.FC = () => {
   }, [navigate]);
 
   const { isOnline, isSyncing, pendingCount, processScan, syncPending } = useSync();
-
   const sessionScanOn = user ? `SESION ${user.name}` : 'SESION';
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,7 +60,6 @@ const Scanner: React.FC = () => {
     return () => window.removeEventListener('click', focusInput);
   }, []);
 
-  const toggleModal = () => setIsModalOpen((value) => !value);
   const handleZoneSelect = () => navigate('/location');
 
   const handleSend = async (code: string) => {
@@ -73,8 +69,6 @@ const Scanner: React.FC = () => {
     setErrorMsg('');
 
     try {
-      console.log('Procesando scan:', code);
-
       const sessionUserName = user ? user.name : 'Operario Anonimo';
       await processScan(code, sessionUserName, zoneId);
 
@@ -124,13 +118,12 @@ const Scanner: React.FC = () => {
     }
   };
 
-  const handleForceSync = (event: React.MouseEvent) => {
-    event.stopPropagation();
+  const handleForceSync = () => {
     syncPending();
   };
 
   return (
-    <div className="bg-background-light dark:bg-background-dark font-display h-screen w-full overflow-hidden select-none relative pt-6 flex flex-col">
+    <div className="bg-background-light dark:bg-background-dark font-display min-h-screen w-full overflow-hidden select-none relative pt-6 flex flex-col">
       <div className="relative z-20 flex flex-col gap-3 p-4 pt-6 shrink-0">
         <div className="mt-2 bg-white dark:bg-[#181811] rounded-full p-2 pl-3 pr-2 shadow-sm flex items-center justify-between border border-gray-100 dark:border-white/10">
           <div className="flex items-center gap-3">
@@ -163,10 +156,17 @@ const Scanner: React.FC = () => {
       </div>
 
       <div className="flex-1 relative z-10 flex flex-col items-center justify-center p-8 w-full max-w-md mx-auto">
-        {showBanner && (
-          <div className={`z-20 absolute top-4 ${errorMsg ? 'bg-red-500' : 'bg-green-500'} text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-fade-in-down transition-all`}>
-            <span className="material-symbols-outlined icon-fill">{errorMsg ? 'error' : 'check_circle'}</span>
-            <span className="font-bold text-sm">{errorMsg ? errorMsg : `Guardado: ${result}`}</span>
+        {showBanner && !errorMsg && (
+          <div className="z-20 absolute top-4 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-fade-in-down transition-all">
+            <span className="material-symbols-outlined icon-fill">check_circle</span>
+            <span className="font-bold text-sm">Ultima guia registrada: {result}</span>
+          </div>
+        )}
+
+        {showBanner && errorMsg && (
+          <div className="z-20 absolute top-4 bg-red-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-fade-in-down transition-all">
+            <span className="material-symbols-outlined icon-fill">error</span>
+            <span className="font-bold text-sm">{errorMsg}</span>
           </div>
         )}
 
@@ -200,51 +200,33 @@ const Scanner: React.FC = () => {
           >
             {isSubmitting ? 'Guardando...' : 'Anadir Guia'} <span className="material-symbols-outlined">{isSubmitting ? 'hourglass_empty' : 'add_circle'}</span>
           </button>
-        </div>
-      </div>
 
-      <div
-        className="relative z-20 bg-white dark:bg-[#181811] rounded-t-[2rem] shadow-[0_-4px_20px_rgba(0,0,0,0.2)] pb-8 pt-6 px-6 cursor-pointer shrink-0"
-        onClick={toggleModal}
-      >
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full"></div>
-
-        <div className="flex items-end justify-between mb-2">
-          <div>
-            <p className="text-green-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wide mb-1">{sessionScanOn}</p>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-4xl font-bold text-dark-text dark:text-white">...</h3>
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">sesion</span>
+          <div className="w-full rounded-2xl bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 px-4 py-3 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide font-bold text-green-600 dark:text-gray-400">{sessionScanOn}</p>
+                <p className="text-sm font-bold text-dark-text dark:text-white">{pendingCount > 0 ? `${pendingCount} pendientes` : 'Todos sincronizados'}</p>
+              </div>
+              {pendingCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleForceSync}
+                  className="px-4 py-2 rounded-xl font-bold text-xs bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-800 dark:text-orange-300 transition-colors"
+                >
+                  {isSyncing ? 'Sincronizando...' : 'Reintentar'}
+                </button>
+              )}
             </div>
-            {pendingCount > 0 ? (
-              <div className="flex items-center gap-1.5 mt-1 bg-orange-100 dark:bg-orange-900/30 px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800/50 mt-2" onClick={handleForceSync}>
-                <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-orange-400 animate-pulse' : 'bg-orange-500'}`}></span>
-                <p className="text-xs text-orange-700 dark:text-orange-400 font-bold">
-                  {isSyncing ? 'Sincronizando al backend...' : `${pendingCount} pendientes (Toca para reintentar)`}
-                </p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 mt-1 px-1">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-bold">Todos sincronizados</p>
-              </div>
-            )}
-          </div>
 
-          <div className="text-right pointer-events-none">
             {result && (
-              <>
-                <p className="text-gray-400 dark:text-gray-500 text-[10px] font-bold uppercase tracking-wide mb-1">Ultimo</p>
-                <div className="bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10">
-                  <p className="font-mono text-sm text-dark-text dark:text-white font-medium">{result}</p>
-                </div>
-              </>
+              <div className="rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide font-bold text-gray-400 mb-1">Ultima guia valida</p>
+                <p className="font-mono text-sm font-bold text-dark-text dark:text-white">{result}</p>
+              </div>
             )}
           </div>
         </div>
       </div>
-
-      <ScannerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
       {duplicateModalOpen && (
         <div className="absolute inset-0 z-40 bg-black/50 flex items-center justify-center p-6">

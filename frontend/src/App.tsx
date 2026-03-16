@@ -5,7 +5,6 @@ import LocationSelection from './pages/LocationSelection';
 import Scanner from './pages/Scanner';
 import Dashboard from './pages/Dashboard';
 import './App.css';
-
 import ShipmentsTab from './components/admin/ShipmentsTab';
 import UsersTab from './components/admin/UsersTab';
 import ZonesTab from './components/admin/ZonesTab';
