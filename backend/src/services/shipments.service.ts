@@ -2,6 +2,7 @@ import { all, get, run } from "../db/index.js";
 
 export type Scope = "open" | "closed";
 export type RecordSource = "active" | "archive";
+const VALID_SHIPMENT_SIZES = ["S", "M", "L", "XL"];
 
 export interface ShipmentListParams {
   page: number;
@@ -97,9 +98,14 @@ function buildShipmentFilters(params: Omit<ShipmentListParams, "page" | "limit" 
 }
 
 function normalizeUpdateValue(field: string, value: unknown) {
-  if (value === "" && ["status_id", "management_id", "zone_id", "checkout_date", "checkout_by"].includes(field)) {
+  if (value === "" && ["status_id", "management_id", "zone_id", "checkout_date", "checkout_by", "shipment_size"].includes(field)) {
     return null;
   }
+
+  if (field === "shipment_size" && typeof value === "string") {
+    return value.toUpperCase();
+  }
+
   return value;
 }
 
@@ -423,6 +429,7 @@ function getClosedShipmentSelect(whereClause: string) {
         s.scanned_at,
         s.scanned_by,
         s.delivery_type,
+        s.shipment_size,
         s.zone_id,
         s.status_id,
         s.management_id,
@@ -476,6 +483,7 @@ function getClosedShipmentSelect(whereClause: string) {
         a.scanned_at,
         a.scanned_by,
         a.delivery_type,
+        a.shipment_size,
         a.zone_id,
         a.status_id,
         a.management_id,
@@ -664,6 +672,7 @@ export function exportShipments(params: {
   const headers = [
     "tracking_number",
     "delivery_type",
+    "shipment_size",
     "zone_id",
     "office_status",
     "scanned_at",
@@ -699,6 +708,7 @@ export function exportShipmentReport(params: Omit<ShipmentListParams, "page" | "
         `SELECT s.tracking_number,
                 s.amount_total,
                 z.name as zone_name,
+                s.shipment_size,
                 'Abierto' as report_status
          FROM shipments s
          LEFT JOIN zones z ON s.zone_id = z.id
@@ -712,6 +722,7 @@ export function exportShipmentReport(params: Omit<ShipmentListParams, "page" | "
         `SELECT base.tracking_number,
                 base.amount_total,
                 base.zone_name,
+                base.shipment_size,
                 'Archivado/Cerrado' as report_status
          FROM (${getClosedShipmentSelect(whereClause)}) base
          ORDER BY base.scanned_at DESC`,
@@ -902,6 +913,14 @@ export function getTrackingHistory(trackingNumber: string) {
 }
 
 function updateArchivedShipment(trackingNumber: string, body: ShipmentUpdatePayload) {
+  if (
+    body.shipment_size !== undefined &&
+    body.shipment_size !== null &&
+    (typeof body.shipment_size !== "string" || !VALID_SHIPMENT_SIZES.includes(body.shipment_size.toUpperCase()))
+  ) {
+    return { status: 400, body: { error: "El tamaño debe ser S, M, L o XL." } };
+  }
+
   let archiveTracking = trackingNumber;
   const archived = get<any>(
     "SELECT * FROM shipments_archive WHERE tracking_number = :tracking",
@@ -949,6 +968,7 @@ function updateArchivedShipment(trackingNumber: string, body: ShipmentUpdatePayl
     "obs_1", "obs_2", "obs_3",
     "status_id", "management_id",
     "checkout_date", "checkout_by", "zone_id",
+    "shipment_size",
     "amount_total",
   ];
   const updates: string[] = [];
@@ -982,7 +1002,7 @@ function updateArchivedShipment(trackingNumber: string, body: ShipmentUpdatePayl
     run(
       `INSERT INTO shipments (
         tracking_number, created_at, updated_at, scanned_at, scanned_by,
-        delivery_type, zone_id, status_id, management_id, office_status,
+        delivery_type, shipment_size, zone_id, status_id, management_id, office_status,
         notes, obs_1, obs_2, obs_3, client_name, client_phone,
         checkout_date, checkout_by, message_sent, recipient_name, recipient_id,
         recipient_phone, api_last_fetch_at, apx_last_fetch_at, api_success,
@@ -992,7 +1012,7 @@ function updateArchivedShipment(trackingNumber: string, body: ShipmentUpdatePayl
       )
       SELECT
         tracking_number, created_at, datetime('now'), scanned_at, scanned_by,
-        delivery_type, zone_id, status_id, management_id, office_status,
+        delivery_type, shipment_size, zone_id, status_id, management_id, office_status,
         notes, obs_1, obs_2, obs_3, client_name, client_phone,
         checkout_date, checkout_by, message_sent, recipient_name, recipient_id,
         recipient_phone, api_last_fetch_at, apx_last_fetch_at, api_success,
@@ -1027,6 +1047,14 @@ function updateArchivedShipment(trackingNumber: string, body: ShipmentUpdatePayl
 }
 
 function updateActiveShipment(trackingNumber: string, body: ShipmentUpdatePayload) {
+  if (
+    body.shipment_size !== undefined &&
+    body.shipment_size !== null &&
+    (typeof body.shipment_size !== "string" || !VALID_SHIPMENT_SIZES.includes(body.shipment_size.toUpperCase()))
+  ) {
+    return { status: 400, body: { error: "El tamaño debe ser S, M, L o XL." } };
+  }
+
   let oldTracking = trackingNumber;
   const existing = get(
     "SELECT tracking_number FROM shipments WHERE tracking_number = :old",
@@ -1069,6 +1097,7 @@ function updateActiveShipment(trackingNumber: string, body: ShipmentUpdatePayloa
     "obs_1", "obs_2", "obs_3",
     "status_id", "management_id",
     "checkout_date", "checkout_by", "zone_id",
+    "shipment_size",
     "amount_total",
   ];
   const updates: string[] = [];

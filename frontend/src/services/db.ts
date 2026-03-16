@@ -5,6 +5,7 @@ export interface OfflineScan {
   tracking_number: string;
   scanned_by: string;
   delivery_type: string;
+  shipment_size?: 'S' | 'M' | 'L' | 'XL' | null;
   created_at: string;
   status: 'PENDING' | 'SYNCED' | 'ERROR';
   sync_attempts: number;
@@ -19,6 +20,10 @@ export class CibermundoDB extends Dexie {
     super('CibermundoAssistDB');
     
     this.version(1).stores({
+      scans: '++id, tracking_number, status, created_at'
+    });
+
+    this.version(2).stores({
       scans: '++id, tracking_number, status, created_at'
     });
   }

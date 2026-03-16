@@ -14,6 +14,7 @@ export interface ScanPayload {
   scannedBy: string; // "Melissa" por ahora
   deliveryType: string; // "LOCAL" o "ZONA"
   zoneId?: number | null;
+  shipmentSize?: 'S' | 'M' | 'L' | 'XL' | null;
 }
 
 /**

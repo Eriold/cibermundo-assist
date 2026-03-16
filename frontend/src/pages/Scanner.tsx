@@ -11,12 +11,14 @@ const Scanner: React.FC = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [lastScannedSize, setLastScannedSize] = useState<'S' | 'M' | 'L' | 'XL' | null>(null);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateTracking, setDuplicateTracking] = useState('');
 
   const [user, setUser] = useState<UserSession | null>(null);
   const [zoneScan, setZoneScan] = useState<string>('Sin Zona');
   const [zoneId, setZoneId] = useState<number | null>(null);
+  const [shipmentSize, setShipmentSize] = useState<'S' | 'M' | 'L' | 'XL'>('M');
 
   useEffect(() => {
     const sessionUser = getSession();
@@ -70,11 +72,12 @@ const Scanner: React.FC = () => {
 
     try {
       const sessionUserName = user ? user.name : 'Operario Anonimo';
-      await processScan(code, sessionUserName, zoneId);
+      await processScan(code, sessionUserName, zoneId, 'LOCAL', shipmentSize);
 
       if (navigator.vibrate) navigator.vibrate(200);
 
       setResult(code);
+      setLastScannedSize(shipmentSize);
       setShowBanner(true);
 
       if (inputRef.current) {
@@ -156,6 +159,41 @@ const Scanner: React.FC = () => {
           </button>
         </div>
 
+        <div className="bg-white dark:bg-[#181811] rounded-3xl p-4 shadow-sm border border-gray-100 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-sky-600 dark:text-gray-400">Tamaño Actual</span>
+              <h3 className="text-dark-text dark:text-white text-base font-bold leading-none mt-1">Seleccione la talla del paquete</h3>
+            </div>
+            <span className="px-3 py-1 rounded-xl bg-gray-100 dark:bg-white/5 text-dark-text dark:text-white text-sm font-black">
+              {shipmentSize}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {(['S', 'M', 'L', 'XL'] as const).map((size) => {
+              const active = shipmentSize === size;
+              const tone = {
+                S: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20',
+                M: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/20',
+                L: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
+                XL: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
+              }[size];
+
+              return (
+                <button
+                  key={size}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setShipmentSize(size)}
+                  className={`rounded-2xl border px-3 py-3 font-black text-sm transition-all ${tone} ${active ? 'ring-2 ring-primary scale-[1.02]' : 'opacity-80 hover:opacity-100'}`}
+                >
+                  {size}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {!isOnline && (
           <div className="bg-orange-500 text-white text-xs font-bold py-1 px-4 rounded-full text-center mx-auto mt-[-10px] shadow z-30">
             MODO OFFLINE (Backend inaccesible)
@@ -167,7 +205,7 @@ const Scanner: React.FC = () => {
         {showBanner && !errorMsg && (
           <div className="z-20 absolute top-4 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-fade-in-down transition-all">
             <span className="material-symbols-outlined icon-fill">check_circle</span>
-            <span className="font-bold text-sm">Ultima guia registrada: {result}</span>
+            <span className="font-bold text-sm">Ultima guia registrada: {result}{lastScannedSize ? ` · Tamaño ${lastScannedSize}` : ''}</span>
           </div>
         )}
 
@@ -233,6 +271,7 @@ const Scanner: React.FC = () => {
               <div className="rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide font-bold text-gray-400 mb-1">Ultima guia valida</p>
                 <p className="font-mono text-sm font-bold text-dark-text dark:text-white">{result}</p>
+                {lastScannedSize && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Tamaño: {lastScannedSize}</p>}
               </div>
             )}
           </div>

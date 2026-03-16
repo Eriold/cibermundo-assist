@@ -107,6 +107,21 @@ const EditShipmentModal = ({
                 </select>
               </div>
               <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Tamaño</label>
+                <select
+                  name="shipment_size"
+                  value={editForm.shipment_size || ''}
+                  onChange={onChange}
+                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#2c2b1f] text-dark-text dark:text-white px-3 py-2 cursor-pointer outline-none focus:border-primary transition-colors font-bold"
+                >
+                  <option value="">-- Sin Tamaño --</option>
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Zona</label>
                 <select
                   name="zone_id"

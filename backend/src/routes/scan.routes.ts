@@ -20,12 +20,14 @@ const VALID_OFFICE_STATES = [
 ];
 
 const VALID_DELIVERY_TYPES = ["LOCAL", "ZONA"];
+const VALID_SHIPMENT_SIZES = ["S", "M", "L", "XL"];
 const JOB_TYPES = ["FETCH_PAYMENT_API", "FETCH_PORTAL_APX"];
 
 interface ScanRequest {
   trackingNumber?: unknown;
   deliveryType?: unknown;
   zoneId?: unknown;
+  shipmentSize?: unknown;
   scannedBy?: unknown;
   officeStatus?: unknown;
 }
@@ -55,6 +57,14 @@ function validateScanInput(body: ScanRequest) {
     }
   }
 
+  if (body.shipmentSize !== null && body.shipmentSize !== undefined) {
+    if (typeof body.shipmentSize !== "string") {
+      errors.push("shipmentSize must be a string");
+    } else if (!VALID_SHIPMENT_SIZES.includes(body.shipmentSize)) {
+      errors.push(`shipmentSize must be one of: ${VALID_SHIPMENT_SIZES.join(", ")}`);
+    }
+  }
+
   // scannedBy (string no vacío)
   if (typeof body.scannedBy !== "string" || body.scannedBy.trim() === "") {
     errors.push("scannedBy must be a non-empty string");
@@ -75,7 +85,7 @@ function validateScanInput(body: ScanRequest) {
 // POST /scan - Escanear guía con validación fuerte
 router.post("/", (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { trackingNumber, deliveryType, zoneId, scannedBy, officeStatus } = req.body;
+    const { trackingNumber, deliveryType, zoneId, shipmentSize, scannedBy, officeStatus } = req.body;
 
     // Validar entrada
     const errors = validateScanInput(req.body);
@@ -126,6 +136,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
         scanned_at,
         scanned_by,
         delivery_type,
+        shipment_size,
         zone_id,
         office_status
       ) VALUES (
@@ -135,6 +146,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
         :now,
         :scannedBy,
         :deliveryType,
+        :shipmentSize,
         :zoneId,
         :status
       )
@@ -144,6 +156,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
         ":now": now,
         ":scannedBy": scannedBy,
         ":deliveryType": deliveryType,
+        ":shipmentSize": shipmentSize ?? null,
         ":zoneId": zoneId ?? null,
         ":status": status,
       }

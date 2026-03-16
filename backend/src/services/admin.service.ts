@@ -14,7 +14,7 @@ export const archiveOldShipments = (): ArchiveOldShipmentsResult => {
     const archiveSql = `
       INSERT INTO shipments_archive (
         tracking_number, archived_at, created_at, updated_at, scanned_at, scanned_by,
-        delivery_type, zone_id, status_id, management_id, office_status, notes,
+        delivery_type, shipment_size, zone_id, status_id, management_id, office_status, notes,
         obs_1, obs_2, obs_3, client_name, client_phone, checkout_date, checkout_by,
         message_sent, recipient_name, recipient_id, recipient_phone, api_last_fetch_at,
         apx_last_fetch_at, api_success, api_message, api_current_state_id,
@@ -23,7 +23,7 @@ export const archiveOldShipments = (): ArchiveOldShipmentsResult => {
       )
       SELECT
         tracking_number, datetime('now'), created_at, updated_at, scanned_at, scanned_by,
-        delivery_type, zone_id, status_id, management_id, office_status, notes,
+        delivery_type, shipment_size, zone_id, status_id, management_id, office_status, notes,
         obs_1, obs_2, obs_3, client_name, client_phone, checkout_date, checkout_by,
         message_sent, recipient_name, recipient_id, recipient_phone, api_last_fetch_at,
         apx_last_fetch_at, api_success, api_message, api_current_state_id,

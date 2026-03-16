@@ -54,3 +54,40 @@ export const getGestionBadge = (count: number | undefined | null) => {
     border: 'border-l-4 border-red-500',
   };
 };
+
+export const getShipmentSizeBadge = (size: string | null | undefined) => {
+  const normalized = typeof size === 'string' ? size.toUpperCase() : '';
+
+  if (normalized === 'S') {
+    return {
+      label: 'S',
+      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+    };
+  }
+
+  if (normalized === 'M') {
+    return {
+      label: 'M',
+      className: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
+    };
+  }
+
+  if (normalized === 'L') {
+    return {
+      label: 'L',
+      className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+    };
+  }
+
+  if (normalized === 'XL') {
+    return {
+      label: 'XL',
+      className: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+    };
+  }
+
+  return {
+    label: 'Sin dato',
+    className: 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400',
+  };
+};

@@ -1,6 +1,19 @@
-import { run } from "./index.js";
+import { get, run } from "./index.js";
 
 export function initSchema() {
+  const ensureColumn = (table: string, column: string, definition: string) => {
+    run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  };
+
+  const hasColumn = (table: string, column: string) => {
+    try {
+      get(`SELECT ${column} FROM ${table} LIMIT 1`);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +85,7 @@ export function initSchema() {
       scanned_by TEXT NOT NULL,
 
       delivery_type TEXT NOT NULL,
+      shipment_size TEXT,
       zone_id INTEGER,
       status_id INTEGER DEFAULT 1,      -- 1: Abierto
       management_id INTEGER DEFAULT 1,  -- 1: Sin gestion
@@ -122,6 +136,7 @@ export function initSchema() {
       scanned_at TEXT NOT NULL,
       scanned_by TEXT NOT NULL,
       delivery_type TEXT NOT NULL,
+      shipment_size TEXT,
       zone_id INTEGER,
       status_id INTEGER,
       management_id INTEGER,
@@ -211,4 +226,12 @@ export function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_jobs_tracking
     ON jobs(tracking_number)
   `);
+
+  if (!hasColumn("shipments", "shipment_size")) {
+    ensureColumn("shipments", "shipment_size", "TEXT");
+  }
+
+  if (!hasColumn("shipments_archive", "shipment_size")) {
+    ensureColumn("shipments_archive", "shipment_size", "TEXT");
+  }
 }

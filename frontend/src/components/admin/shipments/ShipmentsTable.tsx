@@ -1,5 +1,5 @@
 import type { GestionSummary, Shipment } from './types';
-import { formatDate, getGestionBadge } from './utils';
+import { formatDate, getGestionBadge, getShipmentSizeBadge } from './utils';
 
 interface ShipmentsTableProps {
   allVisibleSelected: boolean;
@@ -59,6 +59,7 @@ const ShipmentsTable = ({
                 </label>
               </th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Zona</th>
+              <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-center">Tamaño</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Fecha Ingreso</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Cliente</th>
               <th className="p-4 py-3 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Telefono</th>
@@ -70,7 +71,7 @@ const ShipmentsTable = ({
           <tbody className="divide-y divide-gray-100 dark:divide-white/5">
             {loading && shipments.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
+                <td colSpan={9} className="p-10 text-center text-gray-400 h-64">
                   <div className="flex flex-col items-center justify-center">
                     <span className="material-symbols-outlined animate-spin text-4xl mb-2">progress_activity</span>
                     <p className="font-bold">Cargando...</p>
@@ -79,7 +80,7 @@ const ShipmentsTable = ({
               </tr>
             ) : visibleShipments.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-10 text-center text-gray-400 h-64">
+                <td colSpan={9} className="p-10 text-center text-gray-400 h-64">
                   <div className="flex flex-col items-center justify-center">
                     <span className="material-symbols-outlined text-4xl mb-2 opacity-50">inbox</span>
                     <p className="font-bold">No hay guias registradas en este apartado.</p>
@@ -89,6 +90,7 @@ const ShipmentsTable = ({
             ) : (
               visibleShipments.map((shipment, index) => {
                 const badge = getGestionBadge(shipment.gestion_count);
+                const sizeBadge = getShipmentSizeBadge(shipment.shipment_size);
                 const isSelected = selectedShipmentKeys.includes(getShipmentSelectionKey(shipment));
 
                 return (
@@ -112,6 +114,11 @@ const ShipmentsTable = ({
                     </td>
                     <td className="p-4 text-sm font-medium text-gray-600 dark:text-gray-300">
                       {shipment.zone_name || <span className="text-gray-400 italic">Central</span>}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className={`inline-flex min-w-14 items-center justify-center rounded-lg px-2.5 py-1 text-xs font-black uppercase tracking-wider ${sizeBadge.className}`}>
+                        {sizeBadge.label}
+                      </span>
                     </td>
                     <td className="p-4 text-sm font-medium text-gray-600 dark:text-gray-300">
                       {formatDate(shipment.scanned_at)}
@@ -177,7 +184,7 @@ const ShipmentsTable = ({
           </tbody>
           <tfoot className="sticky bottom-0 bg-gray-100 dark:bg-[#1f1e16] border-t border-gray-200 dark:border-white/10 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <tr>
-              <td colSpan={5} className="p-4 text-right font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest text-sm">
+              <td colSpan={6} className="p-4 text-right font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest text-sm">
                 Total a Recolectar ({shipments.length}):
               </td>
               <td className="p-4 font-black text-primary text-lg">${totalCollect.toLocaleString()}</td>

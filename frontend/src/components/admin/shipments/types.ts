@@ -5,6 +5,7 @@ export interface Shipment {
   scanned_at: string;
   scanned_by: string;
   delivery_type: string;
+  shipment_size?: 'S' | 'M' | 'L' | 'XL' | null;
   office_status: string;
   api_success?: number;
   api_message?: string | null;

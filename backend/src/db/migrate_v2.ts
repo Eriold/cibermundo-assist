@@ -60,6 +60,7 @@ async function runMigration() {
     checkAndAddColumn('shipments', existingShipmentCols, 'checkout_date', 'TEXT');
     checkAndAddColumn('shipments', existingShipmentCols, 'checkout_by', 'INTEGER');
     checkAndAddColumn('shipments', existingShipmentCols, 'message_sent', 'INTEGER DEFAULT 0');
+    checkAndAddColumn('shipments', existingShipmentCols, 'shipment_size', 'TEXT');
 
     // Mismo proceso para shipments_archive
     run(`CREATE TABLE IF NOT EXISTS shipments_archive (tracking_number TEXT PRIMARY KEY, archived_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, scanned_at TEXT NOT NULL, scanned_by TEXT NOT NULL, delivery_type TEXT NOT NULL, zone_id INTEGER, office_status TEXT NOT NULL, notes TEXT, recipient_name TEXT, recipient_id TEXT, recipient_phone TEXT, api_last_fetch_at TEXT, apx_last_fetch_at TEXT, api_success INTEGER DEFAULT 0, api_message TEXT, api_current_state_id INTEGER, api_current_state_desc TEXT, api_current_city TEXT, api_current_state_at TEXT, payment_code INTEGER, payment_desc TEXT, amount_total INTEGER, amount_declared INTEGER, amount_to_collect INTEGER)`);
@@ -76,6 +77,7 @@ async function runMigration() {
     checkAndAddColumn('shipments_archive', existingArchiveCols, 'checkout_date', 'TEXT');
     checkAndAddColumn('shipments_archive', existingArchiveCols, 'checkout_by', 'INTEGER');
     checkAndAddColumn('shipments_archive', existingArchiveCols, 'message_sent', 'INTEGER DEFAULT 0');
+    checkAndAddColumn('shipments_archive', existingArchiveCols, 'shipment_size', 'TEXT');
 
     // Fase 8: Gestión Tracking
     checkAndAddColumn('shipments', existingShipmentCols, 'gestion_count', 'INTEGER DEFAULT 0');
