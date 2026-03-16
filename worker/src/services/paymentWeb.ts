@@ -15,6 +15,7 @@ import {
   waitForPaymentResponse,
 } from "./payment-web-helpers.js";
 import type { PaymentWebResponse } from "./payment-web-types.js";
+import { logger } from "./logger.js";
 
 class PaymentWebSingleton {
   private browser: Browser | null = null;
@@ -46,34 +47,32 @@ class PaymentWebSingleton {
 
   async init(): Promise<void> {
     if (this.browser) {
-      console.log("[PAYMENT_PW] Browser already initialized, skipping init");
+      logger.debug("[PAYMENT_PW] Browser already initialized, skipping init");
       return;
     }
 
-    // Leer env var HEADLESS (por defecto true, HEADLESS=false lanza visible)
     const headless = process.env.HEADLESS !== "false";
-    console.log("[PAYMENT_PW] Launching browser (headless:", headless, ")");
+    logger.info(`[PAYMENT_PW] Launching browser (headless: ${headless})`);
 
-    this.browser = await chromium.launch({ 
+    this.browser = await chromium.launch({
       headless,
       args: [
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
         "--no-sandbox",
-        "--disable-setuid-sandbox"
+        "--disable-setuid-sandbox",
       ],
-      ignoreDefaultArgs: ["--enable-automation"]
+      ignoreDefaultArgs: ["--enable-automation"],
     });
-    
+
     this.context = await this.browser.newContext({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
       viewport: { width: 1280, height: 720 },
-      javaScriptEnabled: true
+      javaScriptEnabled: true,
     });
 
     this.page = await this.createPage();
-
-    console.log("[PAYMENT_PW] Browser initialized with stealth settings");
+    logger.debug("[PAYMENT_PW] Browser initialized with stealth settings");
   }
 
   async fetch(trackingNumber: string): Promise<PaymentWebResponse> {
@@ -86,43 +85,38 @@ class PaymentWebSingleton {
       try {
         const currentUrl = page.url();
         if (!currentUrl.startsWith("https://www3.interrapidisimo.com/SiguetuEnvio/shipment")) {
-          console.log(`[PAYMENT_PW] Navigating to shipment page (attempt ${attemptNum})...`);
+          logger.debug(`[PAYMENT_PW] Navigating to shipment page (attempt ${attemptNum})...`);
           await page.goto(PAYMENT_SHIPMENT_URL, { waitUntil: "domcontentloaded" });
           await page.waitForTimeout(1000);
         }
 
-        console.log(`[PAYMENT_PW] Waiting for ${PAYMENT_GUIDE_INPUT_SELECTOR} visible (attempt ${attemptNum})...`);
+        logger.debug(`[PAYMENT_PW] Waiting for ${PAYMENT_GUIDE_INPUT_SELECTOR} visible (attempt ${attemptNum})...`);
         await page.waitForSelector(PAYMENT_GUIDE_INPUT_SELECTOR, { timeout: 15000 });
         await page.waitForTimeout(500);
 
-        console.log(`[PAYMENT_PW] Filling ${PAYMENT_GUIDE_INPUT_SELECTOR} with ${trackingNumber}`);
+        logger.debug(`[PAYMENT_PW] Filling ${PAYMENT_GUIDE_INPUT_SELECTOR} with ${trackingNumber}`);
         await clearGuideInput(page);
         await page.type(PAYMENT_GUIDE_INPUT_SELECTOR, trackingNumber, { delay: 30 });
 
-        console.log("[PAYMENT_PW] Waiting for API response...");
+        logger.debug("[PAYMENT_PW] Waiting for API response...");
         const waitForResponsePromise = waitForPaymentResponse(page);
 
         await triggerSearch(page);
+        const responseJson: PaymentWebResponse = await waitForResponsePromise;
+        logger.debug(`[PAYMENT_PW] Got response Success=${responseJson.Success}`);
 
         try {
-          const responseJson: PaymentWebResponse = await waitForResponsePromise;
-          console.log(`[PAYMENT_PW] Got response Success=${responseJson.Success}`);
-
-          try {
-            await clearGuideInput(page);
-            console.log("[PAYMENT_PW] Input cleared for next request");
-          } catch (cleanupError) {
-            console.log("[PAYMENT_PW] Warning: Could not clear input:", cleanupError);
-          }
-
-          return responseJson;
-        } catch (error) {
-          throw error;
+          await clearGuideInput(page);
+          logger.debug("[PAYMENT_PW] Input cleared for next request");
+        } catch (cleanupError) {
+          logger.debug("[PAYMENT_PW] Warning: Could not clear input:", cleanupError);
         }
+
+        return responseJson;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         const currentUrl = page.url();
-        console.log(`[PAYMENT_PW] Attempt ${attemptNum} failed: ${errorMsg}`);
+        logger.warn(`[PAYMENT_PW] Attempt ${attemptNum} failed: ${errorMsg}`);
 
         if (attemptNum === 1) {
           const shouldResetPage =
@@ -130,21 +124,20 @@ class PaymentWebSingleton {
             currentUrl.startsWith("chrome-error://");
 
           if (shouldResetPage) {
-            console.log("[PAYMENT_PW] Resetting broken page before retry...");
+            logger.warn("[PAYMENT_PW] Resetting broken page before retry...");
             await this.resetPage();
           } else {
-            console.log("[PAYMENT_PW] Reloading page before retry...");
+            logger.debug("[PAYMENT_PW] Reloading page before retry...");
             await page.reload({ waitUntil: "domcontentloaded" });
           }
 
-          console.log("[PAYMENT_PW] Retrying fetch...");
+          logger.info("[PAYMENT_PW] Retrying fetch...");
           return attemptFetch(2);
         }
 
-        // Debug info on final failure
         try {
           await page.screenshot({ path: "payment-fail.png", fullPage: true });
-          console.log("[PAYMENT_PW] Failure screenshot saved to payment-fail.png");
+          logger.warn("[PAYMENT_PW] Failure screenshot saved to payment-fail.png");
         } catch {}
 
         throw error;
@@ -156,7 +149,7 @@ class PaymentWebSingleton {
 
   async close(): Promise<void> {
     if (this.browser) {
-      console.log("[PAYMENT_PW] Closing browser");
+      logger.info("[PAYMENT_PW] Closing browser");
       await this.browser.close();
       this.browser = null;
       this.context = null;

@@ -3,6 +3,7 @@ import {
   EXPLORER_CARD_SELECTOR,
   EXPLORER_SEARCH_INPUT_SELECTOR,
 } from "./apx-constants.js";
+import { isDebugEnabled, logger } from "./logger.js";
 
 export async function closePage(page: Page | null): Promise<void> {
   if (!page) return;
@@ -34,13 +35,13 @@ export async function submitLoginCredentials(page: Page, user: string, pass: str
     { user, pass }
   );
 
-  console.log("[APX] Credentials set via native setter, waiting for button...");
+  logger.debug("[APX] Credentials set via native setter, waiting for button...");
 
   try {
     await page.waitForSelector("#botonLogin:not([disabled])", { timeout: 5000 });
-    console.log("[APX] Button enabled naturally");
+    logger.debug("[APX] Button enabled naturally");
   } catch {
-    console.log("[APX] Button still disabled, submitting form via JS...");
+    logger.debug("[APX] Button still disabled, submitting form via JS...");
     await page.evaluate(() => {
       const form = document.querySelector("form");
       if (form) {
@@ -61,42 +62,43 @@ export async function submitLoginCredentials(page: Page, user: string, pass: str
 }
 
 export async function finalizeLogin(page: Page): Promise<void> {
-  console.log("[APX] Waiting for authentication to complete...");
+  logger.debug("[APX] Waiting for authentication to complete...");
 
   try {
     await Promise.race([
       page.waitForSelector('text="BIENVENIDO"', { timeout: 60000 }),
       page.waitForURL("**/home/aplicaciones", { timeout: 60000 }),
     ]);
-    console.log("[APX] Login successful, dashboard reached.");
+    logger.info("[APX] Login successful, dashboard reached.");
   } catch {
-    console.log("[APX] Warning: Success indicator not found within 60s, checking current URL...");
     if (page.url().includes("/home/aplicaciones")) {
-      console.log("[APX] URL confirms we are in the dashboard.");
+      logger.debug("[APX] URL confirms we are in the dashboard.");
     } else {
-      console.warn("[APX] Login might have failed or is extremely slow. URL:", page.url());
+      logger.warn("[APX] Login might have failed or is extremely slow. URL:", page.url());
     }
   }
 
   await page.waitForTimeout(1000);
 
-  try {
-    await page.screenshot({ path: "apx-login-debug.png", fullPage: true });
-    console.log("[APX] Debug screenshot saved to apx-login-debug.png");
-  } catch {}
+  if (isDebugEnabled()) {
+    try {
+      await page.screenshot({ path: "apx-login-debug.png", fullPage: true });
+      logger.debug("[APX] Debug screenshot saved to apx-login-debug.png");
+    } catch {}
+  }
 
-  console.log("[APX] Post-login URL:", page.url());
+  logger.debug("[APX] Post-login URL:", page.url());
 }
 
 export async function openExplorerPage(
   loginPage: Page,
   context: BrowserContext,
 ): Promise<Page> {
-  console.log("[APX] Navigating to Explorador Envios via dashboard click...");
+  logger.debug("[APX] Navigating to Explorador Envios via dashboard click...");
 
   try {
     await loginPage.waitForSelector(EXPLORER_CARD_SELECTOR, { timeout: 30000 });
-    console.log("[APX] Clicking card to open NEW TAB...");
+    logger.debug("[APX] Clicking card to open new tab...");
 
     const [newPage] = await Promise.all([
       context.waitForEvent("page", { timeout: 30000 }),
@@ -106,17 +108,19 @@ export async function openExplorerPage(
     newPage.setDefaultTimeout(30000);
     newPage.setDefaultNavigationTimeout(60000);
 
-    console.log("[APX] New tab opened, waiting for search input...");
+    logger.debug("[APX] New tab opened, waiting for search input...");
     await newPage.waitForSelector(EXPLORER_SEARCH_INPUT_SELECTOR, { timeout: 30000 });
 
-    console.log("[APX] Explorer page (new tab) ready via click strategy");
+    logger.debug("[APX] Explorer page ready");
     return newPage;
   } catch (error) {
-    console.error("[APX] Click-based navigation failed:", (error as any).message);
+    logger.error("[APX] Click-based navigation failed:", (error as any).message);
 
-    try {
-      await loginPage.screenshot({ path: "apx-click-fail.png" });
-    } catch {}
+    if (isDebugEnabled()) {
+      try {
+        await loginPage.screenshot({ path: "apx-click-fail.png" });
+      } catch {}
+    }
 
     throw error;
   }

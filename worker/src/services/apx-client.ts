@@ -13,13 +13,13 @@ import {
   submitLoginCredentials,
 } from "./apx-session.js";
 import {
-  EXPLORER_CARD_SELECTOR,
   EXPLORER_SEARCH_BUTTON_SELECTOR,
   EXPLORER_SEARCH_INPUT_SELECTOR,
   FLOW_TAB_SELECTOR,
 } from "./apx-constants.js";
 import { calculateGestionCount, scrapeFlowTable, scrapeRecipientInfo } from "./apx-scraping.js";
 import type { ApxResult } from "./apx-types.js";
+import { isDebugEnabled, logger } from "./logger.js";
 
 class ApxClientSingleton {
   private browser: Browser | null = null;
@@ -47,12 +47,12 @@ class ApxClientSingleton {
 
   async init(): Promise<void> {
     if (this.browser) {
-      console.log("[APX] Browser already initialized");
+      logger.debug("[APX] Browser already initialized");
       return;
     }
 
     const headless = process.env.HEADLESS !== "false";
-    console.log("[APX] Launching browser (headless:", headless, ") - User:", this.user);
+    logger.info(`[APX] Launching browser (headless: ${headless})`);
 
     this.browser = await chromium.launch({
       headless,
@@ -72,7 +72,7 @@ class ApxClientSingleton {
       javaScriptEnabled: true,
     });
 
-    console.log("[APX] Browser initialized with stealth settings. User Agent set.");
+    logger.debug("[APX] Browser initialized with stealth settings. User Agent set.");
   }
 
   private async resetPages(): Promise<void> {
@@ -90,7 +90,7 @@ class ApxClientSingleton {
       await this.init();
     }
 
-    console.log("[APX] Logging in to APX portal...");
+    logger.info("[APX] Logging in to APX portal...");
     await this.resetPages();
 
     this.loginPage = await this.context!.newPage();
@@ -98,7 +98,7 @@ class ApxClientSingleton {
     this.loginPage.setDefaultNavigationTimeout(60000);
 
     await this.loginPage.goto(this.loginUrl, { waitUntil: "domcontentloaded" });
-    console.log("[APX] Login page loaded:", this.loginPage.url());
+    logger.debug("[APX] Login page loaded:", this.loginPage.url());
 
     await this.loginPage.waitForSelector("#usernameLogin", { timeout: 20000 });
     await this.loginPage.waitForTimeout(2000);
@@ -123,11 +123,11 @@ class ApxClientSingleton {
   private async ensureSession(): Promise<void> {
     const valid = await this.isSessionValid();
     if (valid) {
-      console.log("[APX] Session is valid, reusing...");
+      logger.debug("[APX] Session is valid, reusing...");
       return;
     }
 
-    console.log("[APX] Session expired or not established, re-authenticating...");
+    logger.warn("[APX] Session expired or not established, re-authenticating...");
     await this.login();
     await this.navigateToExplorer();
   }
@@ -138,16 +138,16 @@ class ApxClientSingleton {
   }
 
   private async executeGuideSearch(page: Page, trackingNumber: string): Promise<void> {
-    console.log(`[APX] Searching guide: ${trackingNumber}`);
+    logger.debug(`[APX] Searching guide: ${trackingNumber}`);
     await page.waitForSelector(EXPLORER_SEARCH_INPUT_SELECTOR, { timeout: 10000 });
     await page.click(EXPLORER_SEARCH_INPUT_SELECTOR);
     await page.fill(EXPLORER_SEARCH_INPUT_SELECTOR, "");
     await page.type(EXPLORER_SEARCH_INPUT_SELECTOR, trackingNumber, { delay: 30 });
 
-    console.log(`[APX] Clicking search button (${EXPLORER_SEARCH_BUTTON_SELECTOR})...`);
+    logger.debug(`[APX] Clicking search button (${EXPLORER_SEARCH_BUTTON_SELECTOR})...`);
     await page.click(EXPLORER_SEARCH_BUTTON_SELECTOR);
     await page.waitForLoadState("load", { timeout: 20000 }).catch(() => {
-      console.log("[APX] Load timeout, continuing anyway...");
+      logger.debug("[APX] Load timeout, continuing anyway...");
     });
     await page.waitForTimeout(3000);
   }
@@ -161,22 +161,24 @@ class ApxClientSingleton {
       await this.ensureSession();
       const page = this.explorerPage!;
 
-      try {
-        await page.screenshot({ path: "apx-explorer-debug.png" });
-        console.log("[APX] Explorer tab screenshot saved to apx-explorer-debug.png");
-      } catch {}
+      if (isDebugEnabled()) {
+        try {
+          await page.screenshot({ path: "apx-explorer-debug.png" });
+          logger.debug("[APX] Explorer tab screenshot saved to apx-explorer-debug.png");
+        } catch {}
+      }
 
       await this.executeGuideSearch(page, trackingNumber);
 
       const currentUrl = page.url();
       if (currentUrl.includes("login") || currentUrl.includes("Login")) {
-        console.log("[APX] Session expired during search, re-authenticating...");
+        logger.warn("[APX] Session expired during search, re-authenticating...");
         this.invalidateSession();
         await this.ensureSession();
         return this.fetchGuideData(trackingNumber);
       }
 
-      console.log("[APX] Scraping recipient info...");
+      logger.debug("[APX] Scraping recipient info...");
       let recipientName: string | undefined;
       let recipientPhone: string | undefined;
 
@@ -185,11 +187,11 @@ class ApxClientSingleton {
         recipientName = recipientData.recipientName?.trim();
         recipientPhone = recipientData.recipientPhone?.trim();
       } catch (error) {
-        console.log("[APX] Error scraping recipient info:", (error as any).message);
+        logger.debug("[APX] Error scraping recipient info:", (error as any).message);
       }
 
       if (recipientName) {
-        console.log(`[APX] Found recipient: ${recipientName}`);
+        logger.debug(`[APX] Found recipient: ${recipientName}`);
       }
 
       try {
@@ -202,7 +204,7 @@ class ApxClientSingleton {
           recipientPhone = recipientPhone || recipientData.recipientPhone?.trim();
         }
       } catch (error) {
-        console.log("[APX] Could not click Flujo Guia tab:", error);
+        logger.warn("[APX] Could not click Flujo Guia tab:", error);
         return {
           success: true,
           data: {
@@ -216,8 +218,7 @@ class ApxClientSingleton {
 
       const trackingFlow = await scrapeFlowTable(page);
       const gestionCount = calculateGestionCount(trackingFlow);
-
-      console.log(`[APX] Guide ${trackingNumber}: ${trackingFlow.length} flow rows, ${gestionCount} gestiones`);
+      logger.debug(`[APX] Guide ${trackingNumber}: ${trackingFlow.length} flow rows, ${gestionCount} gestiones`);
 
       return {
         success: true,
@@ -230,7 +231,7 @@ class ApxClientSingleton {
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[APX] Error fetching guide ${trackingNumber}:`, errorMsg);
+      logger.error(`[APX] Error fetching guide ${trackingNumber}:`, errorMsg);
 
       if (
         errorMsg.includes("Timeout") ||
@@ -248,14 +249,14 @@ class ApxClientSingleton {
 
   async waitBetweenScrapes(): Promise<void> {
     const delay = this.scrapeDelayMs;
-    console.log(`[APX] Waiting ${delay}ms before next scrape...`);
+    logger.debug(`[APX] Waiting ${delay}ms before next scrape...`);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
   async close(): Promise<void> {
     if (!this.browser) return;
 
-    console.log("[APX] Closing browser");
+    logger.info("[APX] Closing browser");
     await this.browser.close();
     this.browser = null;
     this.context = null;

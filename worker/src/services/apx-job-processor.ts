@@ -7,6 +7,7 @@ import {
 } from "./job-store.js";
 import { analyzeTrackingFlow } from "./tracking-flow-analysis.js";
 import type { Job, Shipment, TrackingFlowRow } from "./jobs.types.js";
+import { logger } from "./logger.js";
 
 export async function processFetchPortalApx(job: Job): Promise<void> {
   const { id, tracking_number } = job;
@@ -26,7 +27,7 @@ export async function processFetchPortalApx(job: Job): Promise<void> {
     if (!result.success) {
       if (result.needsHuman) {
         markJobNeedsHuman(id, result.error || "Requires human review");
-        console.log(`👤 FETCH_PORTAL_APX needs human: ${tracking_number} - ${result.error}`);
+        logger.warn(`FETCH_PORTAL_APX needs human: ${tracking_number} - ${result.error}`);
       } else {
         throw new Error(result.error || "Unknown APX error");
       }
@@ -97,13 +98,13 @@ export async function processFetchPortalApx(job: Job): Promise<void> {
     saveDbImmediate();
     markJobDone(id);
 
-    console.log(
-      `✓ FETCH_PORTAL_APX success: ${tracking_number} (${data.tracking_flow.length} rows, ${flowAnalysis.activeGestionCount} gestiones activas${flowAnalysis.deliveredFromApp ? ", entregado desde app" : ""})`
+    logger.debug(
+      `FETCH_PORTAL_APX success: ${tracking_number} (${data.tracking_flow.length} rows, ${flowAnalysis.activeGestionCount} gestiones activas${flowAnalysis.deliveredFromApp ? ", entregado desde app" : ""})`
     );
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     markJobFailed(id, errorMsg, job.attempts, job.max_attempts);
-    console.error(`× FETCH_PORTAL_APX failed: ${tracking_number}`, errorMsg);
+    logger.error(`FETCH_PORTAL_APX failed: ${tracking_number}`, errorMsg);
   }
 }
 

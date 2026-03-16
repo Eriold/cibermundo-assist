@@ -6,6 +6,7 @@ import { createApp } from "./app.js";
 import { initDb } from "./db/index.js";
 import { initSchema } from "./db/schema.js";
 import { seedMockShipmentsIfNeeded } from "./db/mock-seed.js";
+import { logger } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,13 +30,11 @@ async function main() {
 
   const app = createApp();
   app.listen(PORT, () => {
-    console.log("\n" + "=".repeat(60));
-    console.log(`✓ Backend running on http://localhost:${PORT}`);
-    console.log("=".repeat(60) + "\n");
+    logger.info(`Backend running on http://localhost:${PORT}`);
   });
 }
 
 main().catch((err) => {
-  console.error("Failed to start server:", err);
+  logger.error("Failed to start server:", err);
   process.exit(1);
 });

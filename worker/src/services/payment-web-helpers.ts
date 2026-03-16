@@ -6,6 +6,7 @@ import {
   PAYMENT_PRIMARY_SEARCH_BUTTON_SELECTOR,
 } from "./payment-web-constants.js";
 import type { PaymentWebResponse } from "./payment-web-types.js";
+import { isDebugEnabled, logger } from "./logger.js";
 
 export async function clearGuideInput(page: Page): Promise<void> {
   await page.click(PAYMENT_GUIDE_INPUT_SELECTOR);
@@ -18,15 +19,15 @@ export async function clearGuideInput(page: Page): Promise<void> {
 export async function triggerSearch(page: Page): Promise<void> {
   const attempts: Array<() => Promise<void>> = [
     async () => {
-      console.log(`[PAYMENT_PW] Clicking ${PAYMENT_PRIMARY_SEARCH_BUTTON_SELECTOR}...`);
+      logger.debug(`[PAYMENT_PW] Clicking ${PAYMENT_PRIMARY_SEARCH_BUTTON_SELECTOR}...`);
       await page.click(PAYMENT_PRIMARY_SEARCH_BUTTON_SELECTOR, { timeout: 4000 });
     },
     async () => {
-      console.log(`[PAYMENT_PW] Clicking ${PAYMENT_FALLBACK_SEARCH_BUTTON_SELECTOR}...`);
+      logger.debug(`[PAYMENT_PW] Clicking ${PAYMENT_FALLBACK_SEARCH_BUTTON_SELECTOR}...`);
       await page.click(PAYMENT_FALLBACK_SEARCH_BUTTON_SELECTOR, { timeout: 4000 });
     },
     async () => {
-      console.log(`[PAYMENT_PW] Pressing Enter in ${PAYMENT_GUIDE_INPUT_SELECTOR}...`);
+      logger.debug(`[PAYMENT_PW] Pressing Enter in ${PAYMENT_GUIDE_INPUT_SELECTOR}...`);
       await page.press(PAYMENT_GUIDE_INPUT_SELECTOR, "Enter");
     },
   ];
@@ -59,19 +60,23 @@ export async function waitForPaymentResponse(page: Page): Promise<PaymentWebResp
 }
 
 export function registerPaymentPageDebug(page: Page): void {
+  if (!isDebugEnabled()) {
+    return;
+  }
+
   page.on("console", (msg) => {
-    console.log(`[PAYMENT_PW][console] ${msg.type()}: ${msg.text()}`);
+    logger.debug(`[PAYMENT_PW][console] ${msg.type()}: ${msg.text()}`);
   });
   page.on("pageerror", (error) => {
-    console.log("[PAYMENT_PW][pageerror]", error);
+    logger.debug("[PAYMENT_PW][pageerror]", error);
   });
   page.on("requestfailed", (request) => {
     const failure = request.failure();
-    console.log(
+    logger.debug(
       `[PAYMENT_PW][requestfailed] ${request.method()} ${request.url()} - ${failure?.errorText || "unknown"}`
     );
   });
   page.on("framenavigated", (frame) => {
-    console.log(`[PAYMENT_PW][framenavigated] ${frame.url()}`);
+    logger.debug(`[PAYMENT_PW][framenavigated] ${frame.url()}`);
   });
 }

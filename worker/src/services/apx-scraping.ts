@@ -5,6 +5,7 @@ import {
   RECIPIENT_PHONE_SELECTORS,
 } from "./apx-constants.js";
 import type { TrackingFlowRow } from "./apx-types.js";
+import { logger } from "./logger.js";
 
 export async function readFirstNonEmpty(page: Page, selectors: string[]): Promise<string | undefined> {
   for (const selector of selectors) {
@@ -104,7 +105,7 @@ export async function scrapeFlowTable(page: Page): Promise<TrackingFlowRow[]> {
       });
     }
   } catch (error) {
-    console.error("[APX] Error scraping flow table:", error);
+    logger.error("[APX] Error scraping flow table:", error);
   }
 
   return rows;
@@ -116,7 +117,7 @@ export function calculateGestionCount(rows: TrackingFlowRow[]): number {
   for (const row of rows) {
     const ciudadMatch = row.ciudad.toUpperCase().includes("URRAO");
     const estadoMatch =
-      row.descripcion_estado.toUpperCase().includes("DEVOLUCIÃ“N") ||
+      row.descripcion_estado.toUpperCase().includes("DEVOLUCIÃƒâ€œN") ||
       row.descripcion_estado.toUpperCase().includes("DEVOLUCION");
     const fechaValid = row.fecha_cambio_estado.trim().length > 0;
 
