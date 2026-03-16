@@ -9,6 +9,7 @@ interface EditShipmentModalProps {
   loadingTracking: boolean;
   managements: CatalogItem[];
   statuses: CatalogItem[];
+  zones: CatalogItem[];
   submitting: boolean;
   trackingHistory: TrackingRow[];
   trackingLastUpdated: string | null;
@@ -24,6 +25,7 @@ const EditShipmentModal = ({
   loadingTracking,
   managements,
   statuses,
+  zones,
   submitting,
   trackingHistory,
   trackingLastUpdated,
@@ -100,6 +102,22 @@ const EditShipmentModal = ({
                   {managements.map((management) => (
                     <option key={management.id} value={management.id}>
                       {management.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Zona</label>
+                <select
+                  name="zone_id"
+                  value={editForm.zone_id || ''}
+                  onChange={onChange}
+                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#2c2b1f] text-dark-text dark:text-white px-3 py-2 cursor-pointer outline-none focus:border-primary transition-colors font-bold"
+                >
+                  <option value="">-- Sin Zona --</option>
+                  {zones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name}
                     </option>
                   ))}
                 </select>

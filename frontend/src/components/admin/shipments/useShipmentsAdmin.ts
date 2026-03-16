@@ -26,6 +26,8 @@ const EMPTY_FILTERS: ShipmentFilters = {
   managementId: '',
   dateFrom: '',
   dateTo: '',
+  checkoutDateFrom: '',
+  checkoutDateTo: '',
 };
 
 export const useShipmentsAdmin = () => {

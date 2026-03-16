@@ -30,6 +30,8 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
       managementId: req.query.managementId as string | undefined,
       dateFrom: req.query.dateFrom as string | undefined,
       dateTo: req.query.dateTo as string | undefined,
+      checkoutDateFrom: req.query.checkoutDateFrom as string | undefined,
+      checkoutDateTo: req.query.checkoutDateTo as string | undefined,
     });
 
     res.json(result);

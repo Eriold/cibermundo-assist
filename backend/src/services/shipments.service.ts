@@ -12,6 +12,8 @@ export interface ShipmentListParams {
   managementId?: string;
   dateFrom?: string;
   dateTo?: string;
+  checkoutDateFrom?: string;
+  checkoutDateTo?: string;
 }
 
 export interface ShipmentUpdatePayload {
@@ -53,6 +55,16 @@ function buildShipmentFilters(params: Omit<ShipmentListParams, "page" | "limit" 
   if (params.dateTo) {
     clauses.push(`${alias}.scanned_at <= :dateTo`);
     sqlParams.dateTo = params.dateTo + "T23:59:59.999Z";
+  }
+
+  if (params.checkoutDateFrom) {
+    clauses.push(`${alias}.checkout_date >= :checkoutDateFrom`);
+    sqlParams.checkoutDateFrom = params.checkoutDateFrom;
+  }
+
+  if (params.checkoutDateTo) {
+    clauses.push(`${alias}.checkout_date <= :checkoutDateTo`);
+    sqlParams.checkoutDateTo = params.checkoutDateTo + "T23:59:59.999Z";
   }
 
   return {
@@ -232,6 +244,8 @@ export function listShipments(params: ShipmentListParams) {
     managementId: params.managementId,
     dateFrom: params.dateFrom,
     dateTo: params.dateTo,
+    checkoutDateFrom: params.checkoutDateFrom,
+    checkoutDateTo: params.checkoutDateTo,
   };
   const { whereClause, params: filterParams } = buildShipmentFilters(filterInput, "s");
 

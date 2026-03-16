@@ -160,6 +160,7 @@ const ShipmentsTab: React.FC = () => {
           loadingTracking={loadingTracking}
           managements={managements}
           statuses={statuses}
+          zones={zones}
           submitting={submitting}
           trackingHistory={trackingHistory}
           trackingLastUpdated={trackingLastUpdated}

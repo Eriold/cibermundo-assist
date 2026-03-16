@@ -18,7 +18,7 @@ const ShipmentsFiltersPanel = ({
   onClear,
 }: ShipmentsFiltersPanelProps) => (
   <div className="bg-white dark:bg-[#181811] rounded-2xl p-5 mb-4 shadow-sm border border-gray-100 dark:border-white/10 animate-fade-in-down shrink-0">
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
       <div>
         <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Zona</label>
         <select
@@ -64,6 +64,24 @@ const ShipmentsFiltersPanel = ({
           type="date"
           value={filters.dateTo}
           onChange={(event) => onChange({ ...filters, dateTo: event.target.value })}
+          className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Desde (Fecha Salida)</label>
+        <input
+          type="date"
+          value={filters.checkoutDateFrom}
+          onChange={(event) => onChange({ ...filters, checkoutDateFrom: event.target.value })}
+          className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Hasta (Fecha Salida)</label>
+        <input
+          type="date"
+          value={filters.checkoutDateTo}
+          onChange={(event) => onChange({ ...filters, checkoutDateTo: event.target.value })}
           className="w-full bg-gray-50 dark:bg-[#2c2b1f] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-dark-text dark:text-white outline-none focus:border-primary"
         />
       </div>

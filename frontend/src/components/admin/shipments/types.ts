@@ -42,6 +42,8 @@ export interface ShipmentFilters {
   managementId: string;
   dateFrom: string;
   dateTo: string;
+  checkoutDateFrom: string;
+  checkoutDateTo: string;
 }
 
 export interface GestionSummary {
