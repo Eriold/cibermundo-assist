@@ -1,9 +1,8 @@
-import type { GestionSummary, Shipment, ShipmentFilters } from './types';
+import type { GestionSummary, Shipment } from './types';
 import { formatDate, getGestionBadge } from './utils';
 
 interface ShipmentsTableProps {
   allVisibleSelected: boolean;
-  filters: ShipmentFilters;
   gestionFilter: number | null;
   gestionSummary: GestionSummary;
   loading: boolean;
@@ -12,7 +11,6 @@ interface ShipmentsTableProps {
   onToggleGestionFilter: (value: number) => void;
   onToggleSelectAllVisible: () => void;
   onToggleShipmentSelection: (shipment: Shipment) => void;
-  searchTerm: string;
   selectedShipmentKeys: string[];
   shipments: Shipment[];
   visibleShipments: Shipment[];
@@ -25,23 +23,10 @@ const colors = [
   'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 ];
 
-const buildExportUrl = (searchTerm: string, filters: ShipmentFilters) => {
-  const params = new URLSearchParams();
-
-  if (searchTerm) params.append('search', searchTerm);
-  if (filters.zoneId) params.append('zoneId', filters.zoneId);
-  if (filters.managementId) params.append('managementId', filters.managementId);
-  if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
-  if (filters.dateTo) params.append('dateTo', filters.dateTo);
-
-  return `${import.meta.env.VITE_API_URL || 'http://localhost:3333'}/shipments/export?${params.toString()}`;
-};
-
 const getShipmentSelectionKey = (shipment: Shipment) => `${shipment.record_source || 'active'}:${shipment.tracking_number}`;
 
 const ShipmentsTable = ({
   allVisibleSelected,
-  filters,
   gestionFilter,
   gestionSummary,
   loading,
@@ -50,7 +35,6 @@ const ShipmentsTable = ({
   onToggleGestionFilter,
   onToggleSelectAllVisible,
   onToggleShipmentSelection,
-  searchTerm,
   selectedShipmentKeys,
   shipments,
   visibleShipments,
@@ -170,13 +154,6 @@ const ShipmentsTable = ({
                     </td>
                     <td className="p-4 text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => window.open(buildExportUrl(searchTerm, filters), '_blank')}
-                          className="size-10 rounded-xl bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors tooltip shrink-0"
-                          title="Exportar Filtradas a CSV"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">download</span>
-                        </button>
                         <button
                           onClick={() => onOpenEdit(shipment)}
                           className="size-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 flex items-center justify-center transition-colors"

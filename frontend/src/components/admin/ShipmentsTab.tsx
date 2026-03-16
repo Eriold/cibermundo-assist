@@ -149,7 +149,6 @@ const ShipmentsTab: React.FC = () => {
 
       <ShipmentsTable
         allVisibleSelected={allVisibleSelected}
-        filters={filters}
         gestionFilter={gestionFilter}
         gestionSummary={gestionSummary}
         loading={loading}
@@ -164,7 +163,6 @@ const ShipmentsTab: React.FC = () => {
         onToggleGestionFilter={(value) => setGestionFilter(gestionFilter === value ? null : value)}
         onToggleSelectAllVisible={toggleSelectAllVisible}
         onToggleShipmentSelection={toggleShipmentSelection}
-        searchTerm={searchTerm}
         selectedShipmentKeys={selectedShipmentKeys}
         shipments={shipments}
         visibleShipments={visibleShipments}
