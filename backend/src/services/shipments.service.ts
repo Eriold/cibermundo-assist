@@ -269,9 +269,8 @@ export function listShipments(params: ShipmentListParams) {
       queryParams
     );
   } else {
-    const closedFilters = buildShipmentFilters(filterInput, "base");
-    const countParams = { ...closedFilters.params };
-    const queryParams = { ...closedFilters.params, limit: safeLimit, offset };
+    const countParams = { ...filterParams };
+    const queryParams = { ...filterParams, limit: safeLimit, offset };
 
     const countRow = get<{ count: number }>(
       `SELECT COUNT(*) as count
@@ -279,12 +278,12 @@ export function listShipments(params: ShipmentListParams) {
          SELECT s.tracking_number, s.scanned_at
          FROM shipments s
          LEFT JOIN statuses st ON s.status_id = st.id
-         WHERE ${closedFilters.whereClause}
+         WHERE ${whereClause}
            AND st.name = 'Cerrado'
          UNION ALL
          SELECT a.tracking_number, a.scanned_at
          FROM shipments_archive a
-         WHERE ${closedFilters.whereClause.replaceAll("base.", "a.")}
+         WHERE ${whereClause.replaceAll("s.", "a.")}
        ) base`,
       countParams
     );
