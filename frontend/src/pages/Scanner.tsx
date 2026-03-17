@@ -173,10 +173,30 @@ const Scanner: React.FC = () => {
             {(['S', 'M', 'L', 'XL'] as const).map((size) => {
               const active = shipmentSize === size;
               const tone = {
-                S: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20',
-                M: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/20',
-                L: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
-                XL: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
+                S: {
+                  active:
+                    'border-emerald-600 dark:border-emerald-300 shadow-[0_10px_24px_-14px_rgba(5,150,105,0.65)]',
+                  base:
+                    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20',
+                },
+                M: {
+                  active:
+                    'border-sky-600 dark:border-sky-300 shadow-[0_10px_24px_-14px_rgba(2,132,199,0.65)]',
+                  base:
+                    'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/20',
+                },
+                L: {
+                  active:
+                    'border-amber-600 dark:border-amber-300 shadow-[0_10px_24px_-14px_rgba(217,119,6,0.65)]',
+                  base:
+                    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
+                },
+                XL: {
+                  active:
+                    'border-rose-600 dark:border-rose-300 shadow-[0_10px_24px_-14px_rgba(225,29,72,0.65)]',
+                  base:
+                    'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
+                },
               }[size];
 
               return (
@@ -185,7 +205,7 @@ const Scanner: React.FC = () => {
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => setShipmentSize(size)}
-                  className={`rounded-2xl border px-3 py-3 font-black text-sm transition-all ${tone} ${active ? 'ring-2 ring-primary scale-[1.02]' : 'opacity-80 hover:opacity-100'}`}
+                  className={`rounded-2xl border px-3 py-3 font-black text-sm transition-all ${tone.base} ${active ? `${tone.active} scale-[1.02]` : 'opacity-80 hover:opacity-100'}`}
                 >
                   {size}
                 </button>

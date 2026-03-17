@@ -65,6 +65,9 @@ export const checkboxCardClassName =
   'flex w-full items-start gap-3 rounded-2xl border border-gray-200/80 bg-white px-4 py-3 text-left transition-colors hover:border-primary/30 hover:bg-gray-50 dark:border-white/10 dark:bg-[#232218] dark:hover:bg-[#2b2a1f]';
 
 export const surfaceClassName =
+  'rounded-lg border border-gray-200/80 bg-white shadow-[0_20px_60px_-40px_rgba(24,24,17,0.35)] dark:border-white/10 dark:bg-[#181811]';
+
+const dialogSurfaceClassName =
   'rounded-[28px] border border-gray-200/80 bg-white shadow-[0_20px_60px_-40px_rgba(24,24,17,0.35)] dark:border-white/10 dark:bg-[#181811]';
 
 interface AdminSectionProps extends HTMLAttributes<HTMLElement> {
@@ -329,7 +332,7 @@ export const Dialog = ({ children, className, width = 'md', ...props }: DialogPr
     <div
       aria-modal="true"
       className={cn(
-        surfaceClassName,
+        dialogSurfaceClassName,
         'max-h-[90vh] w-full overflow-hidden overscroll-contain',
         dialogWidths[width],
         className,
