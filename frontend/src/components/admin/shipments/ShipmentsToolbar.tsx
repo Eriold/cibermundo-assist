@@ -1,3 +1,9 @@
+import {
+  ActionButton,
+  MaterialIcon,
+  SegmentedControl,
+  SurfaceCard,
+} from '../ui/AdminPrimitives';
 import type { TabMode } from './types';
 
 interface ShipmentsToolbarProps {
@@ -25,71 +31,84 @@ const ShipmentsToolbar = ({
   onToggleFilters,
   showFilters,
 }: ShipmentsToolbarProps) => (
-  <div className="flex justify-between items-center mb-4 shrink-0">
-    <div>
-      <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-max">
-        <button
-          onClick={() => onChangeTab('open')}
-          className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'open' ? 'bg-white text-dark-text shadow-sm dark:bg-[#2c2b1f] dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
-          type="button"
-        >
-          Guias Abiertas
-        </button>
-        <button
-          onClick={() => onChangeTab('closed')}
-          className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'closed' ? 'bg-white text-dark-text shadow-sm dark:bg-[#2c2b1f] dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
-          type="button"
-        >
-          Archivadas / Cerradas
-        </button>
-      </div>
-      <p className="text-sm text-gray-500 mt-2">
-        {activeTab === 'open'
-          ? 'Excluye despachos en estado cerrado o finalizado.'
-          : 'Solo guias con Check-out definitivo (Cerradas).'}
-      </p>
-    </div>
-    <div className="flex items-center gap-4">
-      <label className="hidden sm:flex items-center gap-2 cursor-pointer select-none">
-        <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-1">Auto Update (10s)</span>
-        <div className="relative">
-          <input
-            type="checkbox"
-            className="sr-only peer"
-            checked={autoRefresh}
-            onChange={(event) => onToggleAutoRefresh(event.target.checked)}
-          />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary" />
+  <SurfaceCard className="px-5 py-4 sm:px-6">
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="space-y-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+            Vista de trabajo
+          </p>
+          <h2 className="mt-1 text-lg font-black tracking-tight text-dark-text dark:text-white">
+            Estado del historial
+          </h2>
         </div>
-      </label>
-      <button
-        onClick={onToggleFilters}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors ${showFilters ? 'bg-primary text-black' : 'bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white'}`}
-      >
-        <span className="material-symbols-outlined text-[18px]">tune</span>
-        Filtros
-      </button>
-      <button
-        onClick={onLoadGestiones}
-        disabled={loadingGestiones}
-        className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95 disabled:opacity-50"
-        title="Scrapear gestiones de paquetes abiertos"
-      >
-        <span className={`material-symbols-outlined text-[18px] ${loadingGestiones ? 'animate-spin' : ''}`}>
-          {loadingGestiones ? 'sync' : 'update'}
-        </span>
-        Cargar Gestiones
-      </button>
-      <button
-        onClick={onRefresh}
-        disabled={loading}
-        className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95 disabled:opacity-50"
-      >
-        <span className={`material-symbols-outlined text-[18px] ${loading && !autoRefresh ? 'animate-spin' : ''}`}>sync</span>
-        Actualizar
-      </button>
+
+        <div className="max-w-xl">
+          <SegmentedControl
+            ariaLabel="Seleccionar vista de guias"
+            onChange={(value) => onChangeTab(value as TabMode)}
+            options={[
+              { label: 'Guias Abiertas', value: 'open' },
+              { label: 'Archivadas / Cerradas', value: 'closed' },
+            ]}
+            value={activeTab}
+          />
+        </div>
+
+        <p className="text-sm leading-6 text-gray-600 dark:text-gray-300">
+          {activeTab === 'open'
+            ? 'Incluye guias en seguimiento activo y excluye registros con cierre definitivo.'
+            : 'Muestra solo guias con check-out finalizado y consolidadas en historial.'}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3 xl:items-end">
+        <label className="inline-flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white px-4 py-2.5 text-sm font-bold text-dark-text dark:border-white/10 dark:bg-[#232218] dark:text-white">
+          <span className="text-xs uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+            Auto Update 10s
+          </span>
+          <span className="relative inline-flex items-center">
+            <input
+              checked={autoRefresh}
+              className="peer sr-only"
+              onChange={(event) => onToggleAutoRefresh(event.target.checked)}
+              type="checkbox"
+            />
+            <span className="block h-7 w-12 rounded-full bg-gray-200 transition-colors peer-checked:bg-primary dark:bg-white/10" />
+            <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+          </span>
+        </label>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <ActionButton icon="tune" onClick={onToggleFilters} variant={showFilters ? 'primary' : 'secondary'}>
+            {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+          </ActionButton>
+          <ActionButton
+            icon={loadingGestiones ? 'sync' : 'update'}
+            iconClassName={loadingGestiones ? 'animate-spin' : undefined}
+            onClick={onLoadGestiones}
+            variant="subtle"
+          >
+            Cargar Gestiones
+          </ActionButton>
+          <ActionButton
+            disabled={loading}
+            icon="sync"
+            iconClassName={loading ? 'animate-spin' : undefined}
+            onClick={onRefresh}
+            variant="secondary"
+          >
+            Actualizar
+          </ActionButton>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-gray-400">
+          <MaterialIcon className="text-[16px]" name="bolt" />
+          Acciones rapidas para consulta y mantenimiento.
+        </div>
+      </div>
     </div>
-  </div>
+  </SurfaceCard>
 );
 
 export default ShipmentsToolbar;

@@ -17,6 +17,19 @@ export const formatDate = (isoString: string) => {
   return `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes}${ampm}`;
 };
 
+export const formatDateOnly = (isoString: string) => {
+  if (!isoString) return '-';
+
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  return `${day}/${month}/${year}`;
+};
+
 export const getGestionBadge = (count: number | undefined | null) => {
   const current = count ?? 0;
 

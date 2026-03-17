@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import {
+  ActionButton,
+  MaterialIcon,
+  SurfaceCard,
+  cn,
+  fieldClassName,
+} from '../ui/AdminPrimitives';
 import type { ShipmentFilters, TabMode } from './types';
 
 interface ShipmentsSearchHeaderProps {
@@ -65,82 +72,103 @@ const ShipmentsSearchHeader = ({
   };
 
   return (
-    <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 shrink-0 bg-white dark:bg-[#181811] p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-white/10">
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowReportOptions((previous) => !previous)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shrink-0 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[18px]">table_view</span>
-            Extraer Reporte
-          </button>
-          {showReportOptions && (
-            <div className="absolute left-0 top-[calc(100%+8px)] z-20 min-w-56 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#232218] shadow-xl p-2">
-              <button
-                type="button"
-                onClick={() => openReport('summary')}
-                className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-dark-text dark:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-              >
-                Reporte simple
-              </button>
-              <button
-                type="button"
-                onClick={() => openReport('detailed')}
-                className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-dark-text dark:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-              >
-                Reporte detallado
-              </button>
+    <SurfaceCard className="px-5 py-4 sm:px-6">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-end">
+          <div className="relative">
+            <ActionButton icon="table_view" onClick={() => setShowReportOptions((current) => !current)} variant="success">
+              Extraer Reporte
+            </ActionButton>
+
+            {showReportOptions ? (
+              <div className="absolute left-0 top-[calc(100%+8px)] z-20 min-w-56 rounded-3xl border border-gray-200/80 bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#232218]">
+                <button
+                  className="w-full rounded-2xl px-3 py-2 text-left text-sm font-bold text-dark-text transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-white dark:hover:bg-white/5"
+                  onClick={() => openReport('summary')}
+                  type="button"
+                >
+                  Reporte simple
+                </button>
+                <button
+                  className="w-full rounded-2xl px-3 py-2 text-left text-sm font-bold text-dark-text transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-white dark:hover:bg-white/5"
+                  onClick={() => openReport('detailed')}
+                  type="button"
+                >
+                  Reporte detallado
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex-1">
+            <label className="sr-only" htmlFor="shipments-search">
+              Buscar por guia o telefono
+            </label>
+            <div className="relative">
+              <input
+                aria-label="Buscar por guia o telefono"
+                autoComplete="off"
+                className={cn(fieldClassName, 'pr-28')}
+                id="shipments-search"
+                name="shipmentsSearch"
+                onChange={(event) => onChangeSearchTerm(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') onSearch();
+                }}
+                placeholder="Buscar por guia o telefono..."
+                spellCheck={false}
+                type="text"
+                value={searchTerm}
+              />
+              <div className="absolute inset-y-0 right-3 flex items-center gap-2">
+                {searchTerm ? (
+                  <button
+                    aria-label="Limpiar busqueda"
+                    className="inline-flex size-9 items-center justify-center rounded-2xl text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-white/5 dark:hover:text-white"
+                    onClick={onClearSearch}
+                    type="button"
+                  >
+                    <MaterialIcon className="text-[16px]" name="close" />
+                  </button>
+                ) : null}
+                <ActionButton onClick={onSearch} variant="primary">
+                  Buscar
+                </ActionButton>
+              </div>
             </div>
-          )}
+          </div>
         </div>
 
-      <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 px-4 py-2 rounded-xl border border-transparent focus-within:border-primary focus-within:bg-white dark:focus-within:bg-[#2c2b1f] transition-all w-full md:w-80">
-        <span className="material-symbols-outlined text-gray-400">search</span>
-        <input
-          type="text"
-          placeholder="Buscar por guia o telefono..."
-          value={searchTerm}
-          onChange={(event) => onChangeSearchTerm(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') onSearch();
-          }}
-          className="bg-transparent border-none outline-none w-full text-sm font-bold text-dark-text dark:text-white placeholder-gray-400"
-        />
-        {searchTerm && (
-          <button onClick={onClearSearch} className="text-gray-400 hover:text-gray-600 dark:hover:text-white rounded-full flex items-center justify-center">
-            <span className="material-symbols-outlined text-[16px]">close</span>
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200/80 bg-gray-50/80 px-4 py-3 dark:border-white/10 dark:bg-[#232218] xl:min-w-[260px]">
+          <button
+            aria-label="Pagina anterior"
+            className="inline-flex size-10 items-center justify-center rounded-2xl bg-white text-gray-600 transition-colors hover:bg-gray-100 hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+            disabled={page <= 1 || loading}
+            onClick={() => onPageChange(page - 1)}
+            type="button"
+          >
+            <MaterialIcon className="text-[18px]" name="chevron_left" />
           </button>
-        )}
+          <div className="text-center">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+              Paginacion
+            </p>
+            <p className="font-mono text-sm font-black text-dark-text dark:text-white">
+              Pag {page} de {totalPages}
+            </p>
+          </div>
+          <button
+            aria-label="Pagina siguiente"
+            className="inline-flex size-10 items-center justify-center rounded-2xl bg-white text-gray-600 transition-colors hover:bg-gray-100 hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+            disabled={page >= totalPages || loading}
+            onClick={() => onPageChange(page + 1)}
+            type="button"
+          >
+            <MaterialIcon className="text-[18px]" name="chevron_right" />
+          </button>
+        </div>
       </div>
-      <button
-        onClick={onSearch}
-        className="hidden sm:flex items-center justify-center bg-primary text-black font-bold px-4 py-2 rounded-xl shrink-0 transition-transform active:scale-95 hover:bg-primary-dark"
-      >
-        Buscar
-      </button>
-    </div>
-    <div className="flex items-center gap-3">
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page <= 1 || loading}
-        className="size-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
-      >
-        <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-      </button>
-      <span className="text-sm font-bold text-dark-text dark:text-white font-mono">
-        Pag {page} de {totalPages}
-      </span>
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page >= totalPages || loading}
-        className="size-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
-      >
-        <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-      </button>
-    </div>
-  </div>
+    </SurfaceCard>
   );
 };
 

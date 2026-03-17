@@ -24,13 +24,15 @@ export default {
         "dark-text": "#181811",
       },
       fontFamily: {
-        "display": ["Spline Sans", "sans-serif"],
-        "body": ["Noto Sans", "sans-serif"]
+        "display": ["Plus Jakarta Sans", "sans-serif"],
+        "body": ["Plus Jakarta Sans", "sans-serif"]
       },
       borderRadius: {
-        "DEFAULT": "1rem", 
-        "lg": "2rem", 
-        "xl": "3rem", 
+        "DEFAULT": "0.5rem",
+        "lg": "0.5rem",
+        "xl": "0.625rem",
+        "2xl": "0.625rem",
+        "3xl": "0.625rem",
         "full": "9999px"
       },
       animation: {

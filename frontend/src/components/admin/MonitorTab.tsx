@@ -1,35 +1,74 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getShipments } from '../../services/api';
 import { getShipmentSizeBadge } from './shipments/utils';
+import {
+  ActionButton,
+  AdminHeader,
+  AdminSection,
+  InlineAlert,
+  MaterialIcon,
+  StatCard,
+  SurfaceCard,
+  TableCard,
+  TableStatusRow,
+  cn,
+} from './ui/AdminPrimitives';
 
 interface Shipment {
-  tracking_number: string;
+  amount_total?: number;
+  api_current_state_desc?: string;
+  delivery_type: string;
+  office_status: string;
+  payment_desc?: string;
   scanned_at: string;
   scanned_by: string;
-  delivery_type: string;
-  shipment_size?: 'S' | 'M' | 'L' | 'XL' | null;
-  office_status: string;
+  shipment_size?: 'L' | 'M' | 'S' | 'XL' | null;
+  tracking_number: string;
   zone_name?: string;
-  api_current_state_desc?: string;
-  payment_desc?: string;
-  amount_total?: number;
 }
 
-const MonitorTab: React.FC = () => {
+const currencyFormatter = new Intl.NumberFormat('es-CO', {
+  currency: 'COP',
+  maximumFractionDigits: 0,
+  style: 'currency',
+});
+
+const dateFormatter = new Intl.DateTimeFormat('es-CO', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+const formatDate = (value: string) => {
+  if (!value) return '-';
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : dateFormatter.format(date);
+};
+
+const formatCurrency = (value?: number) => {
+  if (typeof value !== 'number') return '-';
+  return currencyFormatter.format(value);
+};
+
+const MonitorTab = () => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchShipments = async (silent = false) => {
-    if (!silent) setLoading(true);
-    if (!silent) setErrorMsg('');
+    if (!silent) {
+      setLoading(true);
+      setErrorMsg('');
+    }
+
     try {
       const data = await getShipments();
       setShipments(data.data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error al cargar guias', error);
-      if (!silent) setErrorMsg('Error cargando guias en el Monitor. Servidor inaccesible.');
+      if (!silent) setErrorMsg('No se pudo cargar el monitor en vivo. Verifica la conexion con el servidor.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -40,121 +79,164 @@ const MonitorTab: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
     if (autoRefresh) {
       interval = setInterval(() => {
         fetchShipments(true);
       }, 10000);
     }
+
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [autoRefresh]);
 
+  const withValue = shipments.filter((shipment) => shipment.payment_desc).length;
+
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
-      <div className="flex justify-between items-center mb-4 shrink-0">
-        <div>
-          <h2 className="text-xl font-bold text-dark-text dark:text-white flex items-center gap-2">Monitor en Vivo <span className="relative flex size-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full size-3 bg-green-500"></span></span></h2>
-          <p className="text-xs text-gray-500 mt-1">Guias procesadas recientemente (Automatico)</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <label className="hidden sm:flex items-center gap-2 cursor-pointer select-none">
-            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-1">Auto Update (10s)</span>
-            <div className="relative">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
-            </div>
-          </label>
-          <button
-            onClick={() => fetchShipments(false)}
-            disabled={loading}
-            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-dark-text dark:text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95 disabled:opacity-50"
-          >
-            <span className={`material-symbols-outlined text-[18px] ${loading && !autoRefresh ? 'animate-spin' : ''}`}>sync</span>
-            Actualizar
-          </button>
-        </div>
-      </div>
+    <AdminSection>
+      <AdminHeader
+        actions={
+          <>
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white px-4 py-2.5 text-sm font-bold text-dark-text dark:border-white/10 dark:bg-[#232218] dark:text-white">
+              <span className="text-xs uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                Auto Update 10s
+              </span>
+              <span className="relative inline-flex items-center">
+                <input
+                  checked={autoRefresh}
+                  className="peer sr-only"
+                  onChange={(event) => setAutoRefresh(event.target.checked)}
+                  type="checkbox"
+                />
+                <span className="block h-7 w-12 rounded-full bg-gray-200 transition-colors peer-checked:bg-primary dark:bg-white/10" />
+                <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+              </span>
+            </label>
+            <ActionButton icon="sync" onClick={() => fetchShipments(false)} variant="secondary">
+              Actualizar
+            </ActionButton>
+          </>
+        }
+        description="Seguimiento inmediato de las guias procesadas recientemente. La recarga automatica sigue activa cada 10 segundos cuando esta habilitada."
+        eyebrow="Tiempo real"
+        title="Monitor en Vivo"
+      >
+        <StatCard icon="inventory_2" label="Registros" value={shipments.length} />
+        <StatCard icon="payments" label="Con valor" tone="success" value={withValue} />
+        <StatCard icon={autoRefresh ? 'autorenew' : 'pause_circle'} label="Auto update" tone="primary" value={autoRefresh ? 'Activo' : 'Pausado'} />
+      </AdminHeader>
 
-      {errorMsg && (
-        <div className="bg-red-500 text-white p-4 rounded-xl shadow-md mb-4 flex items-center gap-2 shrink-0">
-          <span className="material-symbols-outlined">error</span>
-          <p className="font-bold text-sm">{errorMsg}</p>
-        </div>
-      )}
+      {errorMsg ? <InlineAlert>{errorMsg}</InlineAlert> : null}
 
-      <div className="flex-1 bg-white dark:bg-[#181811] rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 overflow-hidden flex flex-col min-h-0">
-        <div className="overflow-x-auto overflow-y-auto flex-1 h-full">
-          <table className="w-full text-left border-collapse min-w-[920px] h-max">
-            <thead className="sticky top-0 bg-gray-50 dark:bg-[#2c2b1f] border-b border-gray-200 dark:border-white/10 z-10 shadow-sm">
-              <tr>
-                <th className="p-4 py-5 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">N Guia</th>
-                <th className="p-4 py-5 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Quien Escaneo</th>
-                <th className="p-4 py-5 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Zona</th>
-                <th className="p-4 py-5 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap text-center">Tamano</th>
-                <th className="p-4 py-5 text-sm font-bold text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">Valor de Guia</th>
+      <SurfaceCard className="px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+              Estado del feed
+            </p>
+            <h2 className="mt-1 flex items-center gap-2 text-lg font-black tracking-tight text-dark-text dark:text-white">
+              Actividad reciente
+              <span className="relative flex size-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-3 rounded-full bg-emerald-500" />
+              </span>
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-500 dark:text-gray-400">
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 dark:bg-white/5">
+              {shipments.length} guias visibles
+            </span>
+            <span className="rounded-full bg-primary/10 px-3 py-1.5 text-primary">
+              {autoRefresh ? 'Actualizacion automatica encendida' : 'Actualizacion manual'}
+            </span>
+          </div>
+        </div>
+      </SurfaceCard>
+
+      <TableCard>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="min-w-[980px] w-full border-collapse text-left">
+            <thead className="sticky top-0 z-10 bg-gray-50/95 shadow-sm backdrop-blur dark:bg-[#232218]/95">
+              <tr className="border-b border-gray-200/80 dark:border-white/10">
+                <th className="px-4 py-3 text-sm font-black text-gray-500 dark:text-gray-400">Guia</th>
+                <th className="px-4 py-3 text-sm font-black text-gray-500 dark:text-gray-400">Escaneada por</th>
+                <th className="px-4 py-3 text-sm font-black text-gray-500 dark:text-gray-400">Zona</th>
+                <th className="px-4 py-3 text-sm font-black text-gray-500 dark:text-gray-400">Fecha</th>
+                <th className="px-4 py-3 text-center text-sm font-black text-gray-500 dark:text-gray-400">Tamano</th>
+                <th className="px-4 py-3 text-right text-sm font-black text-gray-500 dark:text-gray-400">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/5">
               {loading && shipments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-10 text-center text-gray-400 h-64">
-                    <div className="flex flex-col items-center justify-center">
-                      <span className="material-symbols-outlined animate-spin text-4xl mb-2">progress_activity</span>
-                      <p className="font-bold">Cargando...</p>
-                    </div>
-                  </td>
-                </tr>
+                <TableStatusRow
+                  colSpan={6}
+                  description="Estamos consultando las guias procesadas mas recientes."
+                  icon="progress_activity"
+                  iconClassName="animate-spin"
+                  title="Cargando monitor..."
+                />
               ) : shipments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-10 text-center text-gray-400 h-64">
-                    <div className="flex flex-col items-center justify-center">
-                      <span className="material-symbols-outlined text-4xl mb-2 opacity-50">inbox</span>
-                      <p className="font-bold">No hay guias registradas.</p>
-                    </div>
-                  </td>
-                </tr>
+                <TableStatusRow
+                  colSpan={6}
+                  description="Todavia no hay guias recientes para mostrar en este monitor."
+                  icon="inbox"
+                  title="Sin actividad reciente"
+                />
               ) : (
-                shipments.map((ship, i) => {
-                  const sizeBadge = getShipmentSizeBadge(ship.shipment_size);
+                shipments.map((shipment, index) => {
+                  const sizeBadge = getShipmentSizeBadge(shipment.shipment_size);
 
                   return (
-                    <tr key={ship.tracking_number + i} className="hover:bg-gray-50/50 dark:hover:bg-black/20 transition-colors">
-                      <td className="p-4">
+                    <tr className="transition-colors hover:bg-gray-50 dark:hover:bg-white/5" key={`${shipment.tracking_number}-${index}`}>
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="size-10 rounded-full bg-primary-light/20 text-primary flex items-center justify-center shrink-0">
-                            <span className="material-symbols-outlined text-[20px]">package</span>
+                          <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                            <MaterialIcon className="text-[20px]" name="package" />
                           </div>
-                          <div>
-                            <p className="font-mono font-bold text-dark-text dark:text-white text-base">{ship.tracking_number}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{ship.delivery_type}</p>
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-black text-dark-text dark:text-white">
+                              {shipment.tracking_number}
+                            </p>
+                            <p className="truncate text-xs uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                              {shipment.delivery_type}
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 text-sm">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 rounded-lg font-bold">
-                          <span className="material-symbols-outlined text-[14px]">person</span> {ship.scanned_by}
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-white/5 dark:text-gray-200">
+                          <MaterialIcon className="text-[16px]" name="person" />
+                          {shipment.scanned_by}
                         </span>
                       </td>
-                      <td className="p-4 text-sm font-medium text-gray-600 dark:text-gray-300">
-                        {ship.zone_name || <span className="text-gray-400 italic">Central</span>}
+                      <td className="px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+                        {shipment.zone_name || <span className="text-gray-400 italic">Central</span>}
                       </td>
-                      <td className="p-4 text-center">
-                        <span className={`inline-flex min-w-14 items-center justify-center rounded-lg px-2.5 py-1 text-xs font-black uppercase tracking-wider ${sizeBadge.className}`}>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+                        {formatDate(shipment.scanned_at)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={cn(
+                            'inline-flex min-w-16 items-center justify-center rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em]',
+                            sizeBadge.className,
+                          )}
+                        >
                           {sizeBadge.label}
                         </span>
                       </td>
-                      <td className="p-4 text-sm font-medium text-gray-600 dark:text-gray-300 text-right pr-10">
-                        {ship.payment_desc ? (
-                          <span className="text-sm font-bold text-gray-900 dark:text-white">${ship.amount_total?.toLocaleString()}</span>
+                      <td className="px-4 py-3 text-right">
+                        {shipment.payment_desc ? (
+                          <span className="font-bold text-dark-text dark:text-white">
+                            {formatCurrency(shipment.amount_total)}
+                          </span>
                         ) : (
-                          <span className="text-gray-400 italic flex items-center justify-end gap-1"><span className="material-symbols-outlined text-[14px] animate-spin">refresh</span> Cargando</span>
+                          <span className="inline-flex items-center gap-2 text-sm font-bold text-gray-400">
+                            <MaterialIcon className={loading ? 'animate-spin text-[16px]' : 'text-[16px]'} name="schedule" />
+                            Pendiente
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -164,8 +246,8 @@ const MonitorTab: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+      </TableCard>
+    </AdminSection>
   );
 };
 

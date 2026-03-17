@@ -61,9 +61,9 @@ const Home: React.FC = () => {
             {(user?.roles?.canScan || user?.roles?.isAdmin) && (
                 <button 
                     onClick={() => navigate('/location')}
-                    className="group relative flex flex-col gap-3 bg-white dark:bg-surface-dark p-6 rounded-[2rem] shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left overflow-hidden overflow-hidden"
+                    className="group relative flex flex-col gap-3 bg-white dark:bg-surface-dark p-6 rounded-3xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-primary cursor-pointer text-left overflow-hidden overflow-hidden"
                 >
-                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-primary-light/5 rounded-full blur-2xl group-hover:bg-primary-light/20 transition-colors"></div>
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-primary-light/5 rounded-[9999px] blur-2xl group-hover:bg-primary-light/20 transition-colors"></div>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center justify-center size-14 rounded-2xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-black transition-colors">
                             <span className="material-symbols-outlined text-[28px]">qr_code_scanner</span>
@@ -81,9 +81,9 @@ const Home: React.FC = () => {
             {(user?.roles?.isAdmin || user?.roles?.canReport) && (
                 <button 
                     onClick={() => navigate('/dashboard')}
-                    className="group relative flex flex-col gap-3 bg-white dark:bg-surface-dark p-6 rounded-[2rem] shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-blue-500 cursor-pointer text-left overflow-hidden"
+                    className="group relative flex flex-col gap-3 bg-white dark:bg-surface-dark p-6 rounded-3xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 border border-transparent hover:border-blue-500 cursor-pointer text-left overflow-hidden"
                 >
-                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-colors"></div>
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-500/5 rounded-[9999px] blur-2xl group-hover:bg-blue-500/20 transition-colors"></div>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center justify-center size-14 rounded-2xl bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
                             <span className="material-symbols-outlined text-[28px]">analytics</span>

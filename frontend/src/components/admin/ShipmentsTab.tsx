@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import BulkDeleteShipmentsModal from './shipments/BulkDeleteShipmentsModal';
 import DeleteShipmentModal from './shipments/DeleteShipmentModal';
 import EditShipmentModal from './shipments/EditShipmentModal';
@@ -7,8 +7,16 @@ import ShipmentsSearchHeader from './shipments/ShipmentsSearchHeader';
 import ShipmentsTable from './shipments/ShipmentsTable';
 import ShipmentsToolbar from './shipments/ShipmentsToolbar';
 import { useShipmentsAdmin } from './shipments/useShipmentsAdmin';
+import {
+  ActionButton,
+  AdminHeader,
+  AdminSection,
+  InlineAlert,
+  StatCard,
+  SurfaceCard,
+} from './ui/AdminPrimitives';
 
-const ShipmentsTab: React.FC = () => {
+const ShipmentsTab = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -72,7 +80,23 @@ const ShipmentsTab: React.FC = () => {
   } = useShipmentsAdmin();
 
   return (
-    <div className="flex flex-col overflow-visible">
+    <AdminSection>
+      <AdminHeader
+        description="Consulta, edita y depura el historial operativo sin alterar el comportamiento actual de filtros, busqueda, tracking ni acciones sobre registros."
+        eyebrow="Historial"
+        title="Gestion de Guias"
+      >
+        <StatCard
+          icon={activeTab === 'open' ? 'folder_open' : 'archive'}
+          label="Vista"
+          tone="primary"
+          value={activeTab === 'open' ? 'Abiertas' : 'Archivadas'}
+        />
+        <StatCard icon="inventory_2" label="Visibles" value={visibleShipments.length} />
+        <StatCard icon="select_all" label="Seleccionadas" tone="success" value={selectedShipmentsCount} />
+        <StatCard icon={trackingFailuresCount > 0 ? 'warning' : 'check_circle'} label="Fallos tracking" tone="warning" value={trackingFailuresCount} />
+      </AdminHeader>
+
       <ShipmentsToolbar
         activeTab={activeTab}
         autoRefresh={autoRefresh}
@@ -86,65 +110,57 @@ const ShipmentsTab: React.FC = () => {
         showFilters={showFilters}
       />
 
-      {errorMsg && (
-        <div className="bg-red-500 text-white p-4 rounded-xl shadow-md mb-4 flex items-center gap-2 shrink-0">
-          <span className="material-symbols-outlined">error</span>
-          <p className="font-bold text-sm">{errorMsg}</p>
-        </div>
-      )}
+      {errorMsg ? <InlineAlert>{errorMsg}</InlineAlert> : null}
 
-      {activeTab === 'open' && trackingFailuresCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-xl shadow-sm mb-4 flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined">warning</span>
-            <p className="font-bold text-sm">
-              Fallos en obtener informacion: {trackingFailuresCount} guia(s) no pudieron rastrearse despues de 4 intentos.
+      {activeTab === 'open' && trackingFailuresCount > 0 ? (
+        <InlineAlert icon="warning" tone="warning">
+          <div className="space-y-3">
+            <p>
+              Hay <strong>{trackingFailuresCount}</strong> guia(s) con fallo de rastreo luego de 4 intentos.
             </p>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                onClick={() => setShowOnlyTrackingFailures(!showOnlyTrackingFailures)}
+                variant={showOnlyTrackingFailures ? 'primary' : 'secondary'}
+              >
+                {showOnlyTrackingFailures ? 'Ver Todas' : 'Solo Fallos'}
+              </ActionButton>
+              <ActionButton
+                disabled={retryingTrackingFailures}
+                onClick={retryTrackingFailures}
+                variant="success"
+              >
+                {retryingTrackingFailures ? 'Reintentando...' : 'Reintentar Fallos'}
+              </ActionButton>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowOnlyTrackingFailures(!showOnlyTrackingFailures)}
-              className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${showOnlyTrackingFailures ? 'bg-amber-900 text-white' : 'bg-amber-100 hover:bg-amber-200 text-amber-900'}`}
-            >
-              {showOnlyTrackingFailures ? 'Ver Todas' : 'Solo Fallos'}
-            </button>
-            <button
-              type="button"
-              onClick={retryTrackingFailures}
-              disabled={retryingTrackingFailures}
-              className="px-4 py-2 rounded-xl font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
-            >
-              {retryingTrackingFailures ? 'Reintentando...' : 'Reintentar Fallos'}
-            </button>
-          </div>
-        </div>
-      )}
+        </InlineAlert>
+      ) : null}
 
-      {showFilters && (
+      {showFilters ? (
         <ShipmentsFiltersPanel
           filters={filters}
           managements={managements}
-          zones={zones}
           onApply={applyFilters}
           onChange={setFilters}
           onClear={clearFilters}
+          zones={zones}
         />
-      )}
+      ) : null}
 
       <ShipmentsSearchHeader
         activeTab={activeTab}
         filters={filters}
         gestionFilter={gestionFilter}
         loading={loading}
-        page={page}
-        searchTerm={searchTerm}
-        showOnlyTrackingFailures={showOnlyTrackingFailures}
-        totalPages={totalPages}
         onChangeSearchTerm={setSearchTerm}
         onClearSearch={clearSearch}
         onPageChange={changePage}
         onSearch={search}
+        page={page}
+        searchTerm={searchTerm}
+        showOnlyTrackingFailures={showOnlyTrackingFailures}
+        totalPages={totalPages}
       />
 
       <ShipmentsTable
@@ -168,55 +184,56 @@ const ShipmentsTab: React.FC = () => {
         visibleShipments={visibleShipments}
       />
 
-      <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-1">
-        <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
-          Seleccionadas: {selectedShipmentsCount}
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={clearSelectedShipments}
-            disabled={selectedShipmentsCount === 0}
-            className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50"
-          >
-            Limpiar Seleccion
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowBulkDeleteModal(true)}
-            disabled={selectedShipmentsCount === 0}
-            className="px-4 py-2 rounded-xl font-bold text-sm bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
-          >
-            Eliminar Seleccionadas
-          </button>
-        </div>
-      </div>
+      <SurfaceCard className="px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+              Seleccion masiva
+            </p>
+            <h2 className="mt-1 text-lg font-black tracking-tight text-dark-text dark:text-white">
+              {selectedShipmentsCount} guia(s) seleccionadas
+            </h2>
+          </div>
 
-      {showEditModal && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ActionButton disabled={selectedShipmentsCount === 0} onClick={clearSelectedShipments} variant="secondary">
+              Limpiar Seleccion
+            </ActionButton>
+            <ActionButton
+              disabled={selectedShipmentsCount === 0}
+              onClick={() => setShowBulkDeleteModal(true)}
+              variant="danger"
+            >
+              Eliminar Seleccionadas
+            </ActionButton>
+          </div>
+        </div>
+      </SurfaceCard>
+
+      {showEditModal ? (
         <EditShipmentModal
           editForm={editForm}
           editingShipment={editingShipment}
           errorMsg={errorMsg}
           loadingTracking={loadingTracking}
           managements={managements}
-          statuses={statuses}
-          zones={zones}
-          submitting={submitting}
-          trackingHistory={trackingHistory}
-          trackingLastUpdated={trackingLastUpdated}
           onChange={handleFormChange}
           onClose={() => {
             closeEdit();
             setShowEditModal(false);
           }}
           onSubmit={submitEdit}
+          statuses={statuses}
+          submitting={submitting}
+          trackingHistory={trackingHistory}
+          trackingLastUpdated={trackingLastUpdated}
+          zones={zones}
         />
-      )}
+      ) : null}
 
-      {showDeleteModal && (
+      {showDeleteModal ? (
         <DeleteShipmentModal
           deleting={deleting}
-          shipment={shipmentToDelete}
           onCancel={() => {
             setShipmentToDelete(null);
             setShowDeleteModal(false);
@@ -225,10 +242,11 @@ const ShipmentsTab: React.FC = () => {
             await confirmDelete();
             setShowDeleteModal(false);
           }}
+          shipment={shipmentToDelete}
         />
-      )}
+      ) : null}
 
-      {showBulkDeleteModal && selectedShipmentsCount > 0 && (
+      {showBulkDeleteModal && selectedShipmentsCount > 0 ? (
         <BulkDeleteShipmentsModal
           count={selectedShipmentsCount}
           deleting={bulkDeleting}
@@ -238,8 +256,8 @@ const ShipmentsTab: React.FC = () => {
             setShowBulkDeleteModal(false);
           }}
         />
-      )}
-    </div>
+      ) : null}
+    </AdminSection>
   );
 };
 
