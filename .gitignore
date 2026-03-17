@@ -42,3 +42,4 @@ build/
 
 # Agent Memory (Local context)
 _agent/
+.agents/
