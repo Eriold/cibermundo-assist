@@ -143,11 +143,11 @@ const EditShipmentModal = ({
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Cerrado Por</label>
                   <div className="text-sm font-bold text-dark-text dark:text-white mt-1 pt-1">
                     <span className="material-symbols-outlined text-[14px] align-middle mr-1 text-gray-400">check_circle</span>
-                    {editingShipment.checkout_by_name || <span className="text-gray-400 italic">Sin Asignar (Siga el check-out manual)</span>}
+                    {editingShipment.checkout_by_name || <span className="text-gray-400 italic">Sin asignar (siga el cierre manual)</span>}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Fecha Check-Out (Salida/Cierre)</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Fecha de Cierre (Salida)</label>
                   <input
                     type="datetime-local"
                     name="checkout_date"

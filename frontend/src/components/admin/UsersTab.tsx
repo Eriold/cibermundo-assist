@@ -181,7 +181,7 @@ const UsersTab = () => {
         title="Gestion de Usuarios"
       >
         <StatCard icon="group" label="Usuarios" value={users.length} />
-        <StatCard icon="shield_person" label="Admins" tone="primary" value={adminUsers} />
+        <StatCard icon="shield_person" label="Administradores" tone="primary" value={adminUsers} />
         <StatCard icon="qr_code_scanner" label="Escaner" tone="success" value={scannerUsers} />
         <StatCard icon="analytics" label="Reportes" tone="warning" value={reportUsers} />
       </AdminHeader>
@@ -266,7 +266,7 @@ const UsersTab = () => {
                       <div className="flex flex-wrap gap-2">
                         {user.roles.isAdmin ? (
                           <span className={cn(roleBadgeClassName, 'bg-sky-100 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300')}>
-                            Admin
+                            Administrador
                           </span>
                         ) : null}
                         {user.roles.canScan ? (
@@ -430,7 +430,7 @@ const UsersTab = () => {
                 <div className="min-w-0">
                   <p className="text-sm font-black text-dark-text dark:text-white">Reportes</p>
                   <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                    Da acceso al dashboard y al historial general de guias consolidadas.
+                    Da acceso al panel administrativo y al historial general de guias consolidadas.
                   </p>
                 </div>
               </label>

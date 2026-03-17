@@ -140,7 +140,7 @@ const ShipmentsFiltersPanel = ({
         <ActionButton onClick={onClear} variant="secondary">
           Limpiar Filtros
         </ActionButton>
-        <ActionButton icon="search" onClick={onApply} variant="primary">
+        <ActionButton icon="search" onClick={onApply} variant="success">
           Aplicar Filtros
         </ActionButton>
       </div>

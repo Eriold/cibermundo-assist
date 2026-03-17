@@ -58,14 +58,14 @@ const ShipmentsToolbar = ({
         <p className="text-sm leading-6 text-gray-600 dark:text-gray-300">
           {activeTab === 'open'
             ? 'Incluye guias en seguimiento activo y excluye registros con cierre definitivo.'
-            : 'Muestra solo guias con check-out finalizado y consolidadas en historial.'}
+            : 'Muestra solo guias con cierre finalizado y consolidadas en historial.'}
         </p>
       </div>
 
       <div className="flex flex-col gap-3 xl:items-end">
         <label className="inline-flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white px-4 py-2.5 text-sm font-bold text-dark-text dark:border-white/10 dark:bg-[#232218] dark:text-white">
           <span className="text-xs uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-            Auto Update 10s
+            Actualizacion automatica 10 s
           </span>
           <span className="relative inline-flex items-center">
             <input
@@ -80,7 +80,12 @@ const ShipmentsToolbar = ({
         </label>
 
         <div className="flex flex-wrap items-center gap-3">
-          <ActionButton icon="tune" onClick={onToggleFilters} variant={showFilters ? 'primary' : 'secondary'}>
+          <ActionButton
+            className={showFilters ? 'shadow-[0_10px_24px_-10px_rgba(24,24,17,0.75)]' : undefined}
+            icon="tune"
+            onClick={onToggleFilters}
+            variant={showFilters ? 'success' : 'secondary'}
+          >
             {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
           </ActionButton>
           <ActionButton

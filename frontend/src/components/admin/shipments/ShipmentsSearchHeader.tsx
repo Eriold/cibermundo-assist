@@ -73,10 +73,15 @@ const ShipmentsSearchHeader = ({
 
   return (
     <SurfaceCard className="px-5 py-4 sm:px-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-end">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch xl:justify-between">
+        <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-stretch">
           <div className="relative">
-            <ActionButton icon="table_view" onClick={() => setShowReportOptions((current) => !current)} variant="success">
+            <ActionButton
+              className="h-12 min-w-[10.5rem]"
+              icon="table_view"
+              onClick={() => setShowReportOptions((current) => !current)}
+              variant="success"
+            >
               Extraer Reporte
             </ActionButton>
 
@@ -100,15 +105,15 @@ const ShipmentsSearchHeader = ({
             ) : null}
           </div>
 
-          <div className="flex-1">
+          <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-stretch">
             <label className="sr-only" htmlFor="shipments-search">
               Buscar por guia o telefono
             </label>
-            <div className="relative">
+            <div className="relative flex-1">
               <input
                 aria-label="Buscar por guia o telefono"
                 autoComplete="off"
-                className={cn(fieldClassName, 'pr-28')}
+                className={cn(fieldClassName, 'h-12 py-0 pr-12')}
                 id="shipments-search"
                 name="shipmentsSearch"
                 onChange={(event) => onChangeSearchTerm(event.target.value)}
@@ -120,7 +125,7 @@ const ShipmentsSearchHeader = ({
                 type="text"
                 value={searchTerm}
               />
-              <div className="absolute inset-y-0 right-3 flex items-center gap-2">
+              <div className="absolute inset-y-0 right-3 flex items-center">
                 {searchTerm ? (
                   <button
                     aria-label="Limpiar busqueda"
@@ -131,35 +136,30 @@ const ShipmentsSearchHeader = ({
                     <MaterialIcon className="text-[16px]" name="close" />
                   </button>
                 ) : null}
-                <ActionButton onClick={onSearch} variant="primary">
-                  Buscar
-                </ActionButton>
               </div>
             </div>
+            <ActionButton className="h-12 min-w-[8.5rem]" onClick={onSearch} variant="success">
+              Buscar
+            </ActionButton>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200/80 bg-gray-50/80 px-4 py-3 dark:border-white/10 dark:bg-[#232218] xl:min-w-[260px]">
+        <div className="flex h-12 items-center justify-between gap-3 rounded-2xl border border-gray-200/80 bg-gray-50/80 px-3 dark:border-white/10 dark:bg-[#232218] xl:min-w-[250px]">
           <button
             aria-label="Pagina anterior"
-            className="inline-flex size-10 items-center justify-center rounded-2xl bg-white text-gray-600 transition-colors hover:bg-gray-100 hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+            className="inline-flex size-9 items-center justify-center rounded-2xl bg-white text-gray-600 transition-colors hover:bg-gray-100 hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
             disabled={page <= 1 || loading}
             onClick={() => onPageChange(page - 1)}
             type="button"
           >
             <MaterialIcon className="text-[18px]" name="chevron_left" />
           </button>
-          <div className="text-center">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-              Paginacion
-            </p>
-            <p className="font-mono text-sm font-black text-dark-text dark:text-white">
-              Pag {page} de {totalPages}
-            </p>
+          <div className="flex-1 text-center font-mono text-sm font-black text-dark-text dark:text-white">
+            Pag {page} de {totalPages}
           </div>
           <button
             aria-label="Pagina siguiente"
-            className="inline-flex size-10 items-center justify-center rounded-2xl bg-white text-gray-600 transition-colors hover:bg-gray-100 hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+            className="inline-flex size-9 items-center justify-center rounded-2xl bg-white text-gray-600 transition-colors hover:bg-gray-100 hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
             disabled={page >= totalPages || loading}
             onClick={() => onPageChange(page + 1)}
             type="button"

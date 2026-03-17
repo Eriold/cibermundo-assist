@@ -196,7 +196,7 @@ const Scanner: React.FC = () => {
 
         {!isOnline && (
           <div className="bg-orange-500 text-white text-xs font-bold py-1 px-4 rounded-full text-center mx-auto mt-[-10px] shadow z-30">
-            MODO OFFLINE (Backend inaccesible)
+            MODO SIN CONEXION (Backend inaccesible)
           </div>
         )}
       </div>

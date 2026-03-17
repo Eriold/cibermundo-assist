@@ -66,7 +66,7 @@ const LocationSelection: React.FC = () => {
           >
             <span className="material-symbols-outlined text-[#181811] dark:text-primary">arrow_back</span>
           </button>
-          <h2 className="text-lg font-bold tracking-tight">Scanner Pro</h2>
+          <h2 className="text-lg font-bold tracking-tight">Escaner Pro</h2>
         </div>
         
         <div className="flex items-center gap-2">

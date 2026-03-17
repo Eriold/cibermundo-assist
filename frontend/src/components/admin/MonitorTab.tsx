@@ -101,7 +101,7 @@ const MonitorTab = () => {
           <>
             <label className="inline-flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white px-4 py-2.5 text-sm font-bold text-dark-text dark:border-white/10 dark:bg-[#232218] dark:text-white">
               <span className="text-xs uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                Auto Update 10s
+                Actualizacion automatica 10 s
               </span>
               <span className="relative inline-flex items-center">
                 <input
@@ -125,7 +125,12 @@ const MonitorTab = () => {
       >
         <StatCard icon="inventory_2" label="Registros" value={shipments.length} />
         <StatCard icon="payments" label="Con valor" tone="success" value={withValue} />
-        <StatCard icon={autoRefresh ? 'autorenew' : 'pause_circle'} label="Auto update" tone="primary" value={autoRefresh ? 'Activo' : 'Pausado'} />
+        <StatCard
+          icon={autoRefresh ? 'autorenew' : 'pause_circle'}
+          label="Actualizacion automatica"
+          tone="primary"
+          value={autoRefresh ? 'Activa' : 'Pausada'}
+        />
       </AdminHeader>
 
       {errorMsg ? <InlineAlert>{errorMsg}</InlineAlert> : null}
@@ -134,7 +139,7 @@ const MonitorTab = () => {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
-              Estado del feed
+              Estado del flujo
             </p>
             <h2 className="mt-1 flex items-center gap-2 text-lg font-black tracking-tight text-dark-text dark:text-white">
               Actividad reciente

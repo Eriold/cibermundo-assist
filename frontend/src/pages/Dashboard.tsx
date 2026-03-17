@@ -91,7 +91,7 @@ const Dashboard = () => {
               </p>
               <div className="space-y-2">
                 <h1 className="text-3xl font-black tracking-tight text-balance text-dark-text dark:text-white sm:text-[2.6rem]">
-                  Cibermundo Assist
+                  Cibermundo Asistente
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-300 sm:text-[15px]">
                   Administra operacion, catalogos y usuarios desde un solo lugar. La logica se mantiene,
@@ -126,7 +126,7 @@ const Dashboard = () => {
         <div className="grid flex-1 gap-6 2xl:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="hidden 2xl:block">
             <SurfaceCard className="sticky top-6 px-3 py-3">
-              <nav aria-label="Secciones del dashboard" className="space-y-1">
+              <nav aria-label="Secciones del panel" className="space-y-1">
                 {dashboardSections.map((section) => {
                   const active = section.match.includes(location.pathname);
 
@@ -183,7 +183,7 @@ const Dashboard = () => {
 
             <SurfaceCard className="px-5 py-4 sm:px-6">
               <p className="text-[11px] font-black uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">
-                Seccion activa
+                Vista activa
               </p>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
