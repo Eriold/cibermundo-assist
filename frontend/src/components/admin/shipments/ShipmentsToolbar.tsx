@@ -51,6 +51,7 @@ const ShipmentsToolbar = ({
               { label: 'Guias Abiertas', value: 'open' },
               { label: 'Archivadas / Cerradas', value: 'closed' },
             ]}
+            tone="blue"
             value={activeTab}
           />
         </div>

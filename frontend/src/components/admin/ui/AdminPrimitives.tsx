@@ -248,6 +248,7 @@ interface SegmentedControlProps {
   ariaLabel: string;
   onChange: (value: string) => void;
   options: SegmentedOption[];
+  tone?: 'blue' | 'default';
   value: string;
 }
 
@@ -255,11 +256,17 @@ export const SegmentedControl = ({
   ariaLabel,
   onChange,
   options,
+  tone = 'default',
   value,
 }: SegmentedControlProps) => (
   <div
     aria-label={ariaLabel}
-    className="inline-flex w-full flex-wrap gap-2 rounded-3xl border border-gray-200/80 bg-gray-50/80 p-2 dark:border-white/10 dark:bg-[#232218]"
+    className={cn(
+      'inline-flex w-full flex-wrap rounded-3xl border p-2',
+      tone === 'blue'
+        ? 'gap-1 border-blue-200 bg-blue-50/80 dark:border-blue-500/20 dark:bg-blue-500/10'
+        : 'gap-2 border-gray-200/80 bg-gray-50/80 dark:border-white/10 dark:bg-[#232218]',
+    )}
     role="tablist"
   >
     {options.map((option) => {
@@ -270,9 +277,13 @@ export const SegmentedControl = ({
           aria-selected={active}
           className={cn(
             'min-w-[9rem] flex-1 rounded-2xl px-4 py-3 text-left text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-            active
-              ? 'bg-white text-dark-text shadow-sm dark:bg-[#2c2b1f] dark:text-white'
-              : 'text-gray-500 hover:bg-white/70 hover:text-dark-text dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white',
+            tone === 'blue'
+              ? active
+                ? 'bg-blue-400 text-white shadow-sm ring-1 ring-blue-300 [text-shadow:0_0_4px_rgba(0,0,0,0.85),0_2px_8px_rgba(0,0,0,0.65)] dark:bg-blue-400/75 dark:text-white dark:ring-blue-400/30'
+                : 'text-blue-800/70 hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200/75 dark:hover:bg-blue-400/15 dark:hover:text-white'
+              : active
+                ? 'bg-white text-dark-text shadow-sm dark:bg-[#2c2b1f] dark:text-white'
+                : 'text-gray-500 hover:bg-white/70 hover:text-dark-text dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white',
           )}
           key={option.value}
           onClick={() => onChange(option.value)}
