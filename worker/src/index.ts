@@ -64,7 +64,7 @@ async function archiveOldShipmentsPeriodically(): Promise<void> {
 
   lastArchiveCheck = now;
   try {
-    const backendPort = process.env.BACKEND_PORT || "3444";
+    const backendPort = process.env.BACKEND_PORT || "4010";
     const res = await fetch(`http://localhost:${backendPort}/admin/archive`, {
       method: "POST",
     });

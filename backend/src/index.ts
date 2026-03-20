@@ -21,7 +21,8 @@ for (const envPath of [backendEnvPath, rootEnvPath, workerEnvPath]) {
   }
 }
 
-const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT || "3444", 10);
+const DEFAULT_PORT = 4010;
+const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT || String(DEFAULT_PORT), 10);
 
 async function main() {
   await initDb();
@@ -29,8 +30,22 @@ async function main() {
   seedMockShipmentsIfNeeded();
 
   const app = createApp();
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     logger.info(`Backend running on http://localhost:${PORT}`);
+  });
+
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EACCES") {
+      logger.error(
+        `Cannot bind backend to port ${PORT}. The port may be reserved by Windows or require elevated privileges.`
+      );
+    } else if (err.code === "EADDRINUSE") {
+      logger.error(`Cannot bind backend to port ${PORT}. Another process is already using it.`);
+    } else {
+      logger.error("Failed to start HTTP server:", err);
+    }
+
+    process.exit(1);
   });
 }
 

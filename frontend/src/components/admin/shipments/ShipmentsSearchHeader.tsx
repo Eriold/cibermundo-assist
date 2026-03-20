@@ -46,7 +46,7 @@ const buildReportUrl = (
   if (gestionFilter !== null) params.append('gestionCount', String(gestionFilter));
   if (showOnlyTrackingFailures) params.append('onlyTrackingFailures', 'true');
 
-  return `${import.meta.env.VITE_API_URL || 'http://localhost:3333'}/shipments/report?${params.toString()}`;
+  return `${import.meta.env.VITE_API_URL || 'http://localhost:4010'}/shipments/report?${params.toString()}`;
 };
 
 const ShipmentsSearchHeader = ({

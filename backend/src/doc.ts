@@ -6,7 +6,7 @@ import { createApp } from "./app.js";
 import { initDb } from "./db/index.js";
 import { initSchema } from "./db/schema.js";
 
-const PORT = 3333;
+const PORT = 4010;
 const DOCS_URL = `http://localhost:${PORT}/docs`;
 
 async function main() {

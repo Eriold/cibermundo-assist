@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-// La URL se inyecta por Vite. En desarrollo, apuntará a http://localhost:3333 por defecto,
+// La URL se inyecta por Vite. En desarrollo, apuntará a http://localhost:4010 por defecto,
 // o a lo que diga el .env si se configuró VITE_API_URL.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3444';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4010';
 
 const api = axios.create({
   baseURL: API_URL,
