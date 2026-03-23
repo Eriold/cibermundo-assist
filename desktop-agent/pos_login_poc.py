@@ -31,6 +31,9 @@ PREFERRED_APP_NAMES = (
 EXPLORER_CLASS_NAMES = {"CabinetWClass", "ExploreWClass"}
 LOGIN_HINT_TEXTS = ("usuario", "password", "contraseña", "entrar")
 user32 = ctypes.windll.user32
+USERNAME_AUTO_IDS = ("LoginPos_txtUsername",)
+PASSWORD_AUTO_IDS = ("LoginPos_txtPassword",)
+LOGIN_BUTTON_AUTO_IDS = ("LoginPos_btnLogin",)
 
 
 def parse_args() -> argparse.Namespace:
@@ -618,6 +621,17 @@ def find_edit_controls(window, backend: str) -> List:
     return controls
 
 
+def find_control_by_auto_ids(window, auto_ids: Sequence[str], control_type: str):
+    for auto_id in auto_ids:
+        try:
+            control = window.child_window(auto_id=auto_id, control_type=control_type).wrapper_object()
+            if is_control_visible(control) and is_control_enabled(control):
+                return control
+        except Exception:
+            continue
+    return None
+
+
 def set_text(control, value: str) -> None:
     try:
         control.click_input()
@@ -647,6 +661,10 @@ def set_text(control, value: str) -> None:
 
 
 def find_login_button(window, button_title_re: str):
+    control = find_control_by_auto_ids(window, LOGIN_BUTTON_AUTO_IDS, "Button")
+    if control is not None:
+        return control
+
     try:
         return window.child_window(title_re=button_title_re, control_type="Button").wrapper_object()
     except Exception:
@@ -771,8 +789,11 @@ def main() -> int:
         )
         return 1
 
-    username_edit = edits[args.username_index]
-    password_edit = edits[args.password_index]
+    username_edit = find_control_by_auto_ids(window, USERNAME_AUTO_IDS, "Edit") or edits[args.username_index]
+    password_edit = find_control_by_auto_ids(window, PASSWORD_AUTO_IDS, "Edit") or edits[args.password_index]
+
+    print(f"[INFO] Username target: {describe_control(username_edit)}")
+    print(f"[INFO] Password target: {describe_control(password_edit)}")
 
     if username:
         print(f"[INFO] Escribiendo usuario en Edit[{args.username_index}]...")
