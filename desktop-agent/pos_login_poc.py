@@ -88,6 +88,16 @@ def parse_args() -> argparse.Namespace:
         help="Imprime las ventanas top-level candidatas antes de escoger una.",
     )
     parser.add_argument(
+        "--list-top-windows",
+        action="store_true",
+        help="Lista todas las ventanas top-level visibles y termina sin escribir nada.",
+    )
+    parser.add_argument(
+        "--inspect-only",
+        action="store_true",
+        help="Detecta la ventana objetivo e imprime informacion, pero no escribe credenciales.",
+    )
+    parser.add_argument(
         "--submit",
         action="store_true",
         help="Hace click en el boton Entrar o manda Enter despues de llenar la clave.",
@@ -437,11 +447,17 @@ def count_login_hints(control) -> int:
 def describe_top_window(window, backend: str, index: int | None = None) -> str:
     rect = window.rectangle()
     prefix = f"[{index}] " if index is not None else ""
+    process_id = "-"
+    try:
+        process_id = str(window.process_id())
+    except Exception:
+        pass
     return (
         f"{prefix}"
         f"backend={backend} "
         f"title={window.window_text()!r} "
         f"class={get_window_class_name(window) or '-'} "
+        f"pid={process_id} "
         f"visible={is_control_visible(window)} "
         f"enabled={is_control_enabled(window)} "
         f"visible_edits={count_visible_edits(window)} "
@@ -576,6 +592,14 @@ def main() -> int:
         print(f"[INFO] Esperando {args.startup_delay:.1f}s para el arranque inicial...")
         time.sleep(args.startup_delay)
 
+    if args.list_top_windows:
+        all_windows = list_matching_windows(r".*", args.backend)
+        all_windows.sort(key=lambda item: score_candidate_window(item[1]))
+        print("[DEBUG] Ventanas top-level visibles:")
+        for index, (backend, window) in enumerate(all_windows):
+            print(describe_top_window(window, backend, index))
+        return 0
+
     try:
         backend, window = connect_window(
             args.title_re,
@@ -594,6 +618,10 @@ def main() -> int:
     if args.print_controls:
         print()
         print_control_debug(window)
+
+    if args.inspect_only:
+        print("[INFO] Modo inspect-only activo. No se escribiran credenciales.")
+        return 0
 
     if credential_sources:
         print(f"[INFO] Credenciales resueltas: {', '.join(credential_sources)}")
