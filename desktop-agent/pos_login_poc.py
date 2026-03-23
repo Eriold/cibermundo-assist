@@ -49,6 +49,11 @@ def parse_args() -> argparse.Namespace:
         help="Regex para detectar la ventana del POS.",
     )
     parser.add_argument(
+        "--hwnd",
+        type=int,
+        help="Handle HWND de la ventana objetivo. Si se pasa, tiene prioridad sobre title-re.",
+    )
+    parser.add_argument(
         "--button-title-re",
         default=DEFAULT_BUTTON_TITLE_RE,
         help="Regex para detectar el boton de login.",
@@ -303,6 +308,27 @@ def connect_window(title_re: str, selected_backend: str, timeout: float, debug_t
 
     raise TimeoutError(
         f"No se encontro una ventana candidata que matchee {title_re!r} en {timeout} segundos."
+    )
+
+
+def connect_window_by_handle(hwnd: int, selected_backend: str):
+    last_error: str | None = None
+
+    for backend in backend_candidates(selected_backend):
+        try:
+            desktop = Desktop(backend=backend)
+            window = desktop.window(handle=hwnd).wrapper_object()
+            try:
+                window.set_focus()
+            except Exception:
+                pass
+            return backend, window
+        except Exception as exc:
+            last_error = str(exc)
+
+    raise RuntimeError(
+        f"No se pudo conectar a la ventana hwnd={hwnd} con backend={selected_backend}. "
+        f"Ultimo error: {last_error}"
     )
 
 
@@ -646,13 +672,16 @@ def main() -> int:
         return 0
 
     try:
-        backend, window = connect_window(
-            args.title_re,
-            args.backend,
-            args.startup_timeout,
-            debug_top_windows=args.debug_top_windows,
-        )
-    except TimeoutError as exc:
+        if args.hwnd:
+            backend, window = connect_window_by_handle(args.hwnd, args.backend)
+        else:
+            backend, window = connect_window(
+                args.title_re,
+                args.backend,
+                args.startup_timeout,
+                debug_top_windows=args.debug_top_windows,
+            )
+    except (TimeoutError, RuntimeError) as exc:
         print(f"[ERROR] {exc}")
         return 1
 
