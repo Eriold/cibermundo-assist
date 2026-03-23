@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
 from pywinauto import Desktop
-from pywinauto.findwindows import ElementNotFoundError
 from pywinauto.keyboard import send_keys
 
 
@@ -199,6 +198,96 @@ def control_rect_key(control) -> Tuple[int, int]:
     return (rect.top, rect.left)
 
 
+def is_control_visible(control) -> bool:
+    try:
+        if not control.is_visible():
+            return False
+    except Exception:
+        return False
+
+    try:
+        rect = control.rectangle()
+        return rect.width() > 0 and rect.height() > 0
+    except Exception:
+        return False
+
+
+def is_control_enabled(control) -> bool:
+    try:
+        return bool(control.is_enabled())
+    except Exception:
+        return False
+
+
+def get_control_text(control) -> str:
+    try:
+        text = control.window_text()
+        return text if text is not None else ""
+    except Exception:
+        return ""
+
+
+def get_control_class_name(control) -> str:
+    try:
+        value = control.friendly_class_name()
+        if value:
+            return value
+    except Exception:
+        pass
+
+    try:
+        value = control.element_info.class_name
+        return value or ""
+    except Exception:
+        return ""
+
+
+def get_control_type_name(control) -> str:
+    try:
+        value = control.element_info.control_type
+        return value or ""
+    except Exception:
+        return ""
+
+
+def get_control_auto_id(control) -> str:
+    try:
+        value = control.element_info.automation_id
+        return value or ""
+    except Exception:
+        return ""
+
+
+def describe_control(control, index: int | None = None) -> str:
+    rect = control.rectangle()
+    prefix = f"[{index}] " if index is not None else ""
+    return (
+        f"{prefix}"
+        f"type={get_control_type_name(control) or '-'} "
+        f"class={get_control_class_name(control) or '-'} "
+        f"auto_id={get_control_auto_id(control) or '-'} "
+        f"text={get_control_text(control)!r} "
+        f"visible={is_control_visible(control)} "
+        f"enabled={is_control_enabled(control)} "
+        f"rect=({rect.left},{rect.top},{rect.right},{rect.bottom})"
+    )
+
+
+def print_control_debug(window) -> None:
+    try:
+        controls = dedupe_controls(window.descendants())
+    except Exception as exc:
+        print(f"[WARN] No se pudieron listar descendientes: {exc}")
+        return
+
+    controls.sort(key=control_rect_key)
+
+    print("[DEBUG] Controles detectados:\n")
+    for index, control in enumerate(controls):
+        print(describe_control(control, index))
+    print()
+
+
 def dedupe_controls(controls: Iterable) -> List:
     result: List = []
     seen: set[Tuple[int, int, int, int]] = set()
@@ -230,6 +319,15 @@ def find_edit_controls(window, backend: str) -> List:
     controls = dedupe_controls(controls)
     controls.sort(key=control_rect_key)
 
+    actionable_controls = [
+        control
+        for control in controls
+        if is_control_visible(control) and is_control_enabled(control)
+    ]
+
+    if actionable_controls:
+        controls = actionable_controls
+
     if not controls:
         raise RuntimeError(
             f"No se detectaron controles Edit con backend={backend}. "
@@ -240,7 +338,15 @@ def find_edit_controls(window, backend: str) -> List:
 
 
 def set_text(control, value: str) -> None:
-    control.set_focus()
+    try:
+        control.click_input()
+    except Exception:
+        pass
+
+    try:
+        control.set_focus()
+    except Exception:
+        pass
 
     try:
         control.set_edit_text("")
@@ -315,12 +421,8 @@ def main() -> int:
     print(f"[INFO] Titulo ventana: {window.window_text()!r}")
 
     if args.print_controls:
-        print("\n[DEBUG] print_control_identifiers():\n")
-        try:
-            window.print_control_identifiers()
-        except Exception as exc:
-            print(f"[WARN] No se pudieron imprimir identificadores: {exc}")
         print()
+        print_control_debug(window)
 
     if credential_sources:
         print(f"[INFO] Credenciales resueltas: {', '.join(credential_sources)}")
@@ -334,6 +436,10 @@ def main() -> int:
     except RuntimeError as exc:
         print(f"[ERROR] {exc}")
         return 1
+
+    print(f"[INFO] Edit detectados utilizables: {len(edits)}")
+    for index, control in enumerate(edits):
+        print(f"[INFO] {describe_control(control, index)}")
 
     max_index = max(args.username_index, args.password_index)
     if max_index >= len(edits):
