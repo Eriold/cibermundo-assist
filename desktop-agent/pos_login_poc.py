@@ -5,7 +5,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 from pywinauto import Desktop
 from pywinauto.findwindows import ElementNotFoundError
@@ -18,6 +18,8 @@ DEFAULT_APP_PATH = (
 )
 DEFAULT_TITLE_RE = r".*(Interrapidisimo|POS).*"
 DEFAULT_BUTTON_TITLE_RE = r"(?i).*(entrar|ingresar|login|aceptar).*"
+ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+LOCAL_ENV_PATH = Path(__file__).resolve().parent / ".env"
 
 
 def parse_args() -> argparse.Namespace:
@@ -107,6 +109,60 @@ def resolve_app_path(raw_path: str) -> Path:
 
 def launch_app(app_path: Path) -> None:
     os.startfile(str(app_path))
+
+
+def parse_simple_env_file(env_path: Path) -> Dict[str, str]:
+    values: Dict[str, str] = {}
+
+    if not env_path.exists():
+        return values
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+
+        if key:
+            values[key] = value
+
+    return values
+
+
+def load_env_values() -> Dict[str, str]:
+    values: Dict[str, str] = {}
+
+    for env_path in (ROOT_ENV_PATH, LOCAL_ENV_PATH):
+        values.update(parse_simple_env_file(env_path))
+
+    return values
+
+
+def resolve_credentials(args: argparse.Namespace) -> Tuple[str | None, str | None, List[str]]:
+    env_values = load_env_values()
+    sources: List[str] = []
+
+    username = args.username or os.environ.get("APX_USER") or env_values.get("APX_USER")
+    password = args.password or os.environ.get("APX_PASS") or env_values.get("APX_PASS")
+
+    if args.username:
+        sources.append("username desde --username")
+    elif os.environ.get("APX_USER"):
+        sources.append("username desde variable de entorno APX_USER")
+    elif env_values.get("APX_USER"):
+        sources.append(f"username desde {ROOT_ENV_PATH if ROOT_ENV_PATH.exists() else LOCAL_ENV_PATH}")
+
+    if args.password:
+        sources.append("password desde --password")
+    elif os.environ.get("APX_PASS"):
+        sources.append("password desde variable de entorno APX_PASS")
+    elif env_values.get("APX_PASS"):
+        sources.append(f"password desde {ROOT_ENV_PATH if ROOT_ENV_PATH.exists() else LOCAL_ENV_PATH}")
+
+    return username, password, sources
 
 
 def backend_candidates(selected_backend: str) -> Sequence[str]:
@@ -237,6 +293,7 @@ def find_login_button(window, button_title_re: str):
 
 def main() -> int:
     args = parse_args()
+    username, password, credential_sources = resolve_credentials(args)
 
     try:
         app_path = resolve_app_path(args.app_path)
@@ -265,7 +322,10 @@ def main() -> int:
             print(f"[WARN] No se pudieron imprimir identificadores: {exc}")
         print()
 
-    if not args.username and not args.password:
+    if credential_sources:
+        print(f"[INFO] Credenciales resueltas: {', '.join(credential_sources)}")
+
+    if not username and not password:
         print("[INFO] No se recibieron credenciales. POC termina despues de abrir la app.")
         return 0
 
@@ -287,13 +347,13 @@ def main() -> int:
     username_edit = edits[args.username_index]
     password_edit = edits[args.password_index]
 
-    if args.username:
+    if username:
         print(f"[INFO] Escribiendo usuario en Edit[{args.username_index}]...")
-        set_text(username_edit, args.username)
+        set_text(username_edit, username)
 
-    if args.password:
+    if password:
         print(f"[INFO] Escribiendo password en Edit[{args.password_index}]...")
-        set_text(password_edit, args.password)
+        set_text(password_edit, password)
 
     if args.submit:
         print("[INFO] Intentando enviar login...")

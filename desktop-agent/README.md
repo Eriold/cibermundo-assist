@@ -29,11 +29,11 @@ pip install -r requirements.txt
 
 Usa primero `--print-controls` y sin `--submit`.
 
+Si el repo ya tiene `APX_USER` y `APX_PASS` en el `.env` raiz, el script los toma automaticamente y no necesitas pasarlos a mano.
+
 ```powershell
 python .\pos_login_poc.py `
   --app-path "C:\Users\SERVIDOR\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Interrapidisimo\Interrapidisimo POS" `
-  --username "TU_USUARIO" `
-  --password "TU_PASSWORD" `
   --print-controls
 ```
 
@@ -52,9 +52,18 @@ Cuando ya veas que detecta bien los controles:
 ```powershell
 python .\pos_login_poc.py `
   --app-path "C:\Users\SERVIDOR\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Interrapidisimo\Interrapidisimo POS" `
-  --username "TU_USUARIO" `
-  --password "TU_PASSWORD" `
   --submit
+```
+
+## Override manual opcional
+
+Si alguna vez quieres probar otras credenciales sin tocar `.env`, puedes sobrescribirlas:
+
+```powershell
+python .\pos_login_poc.py `
+  --app-path "C:\Users\SERVIDOR\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Interrapidisimo\Interrapidisimo POS" `
+  --username "OTRO_USUARIO" `
+  --password "OTRA_CLAVE"
 ```
 
 ## Ajustes utiles
