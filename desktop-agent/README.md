@@ -31,6 +31,15 @@ Usa primero `--print-controls` y sin `--submit`.
 
 Si el repo ya tiene `APX_USER` y `APX_PASS` en el `.env` raiz, el script los toma automaticamente y no necesitas pasarlos a mano.
 
+Si `--app-path` apunta a una carpeta, el script intenta buscar dentro el archivo real de lanzamiento del POS.
+Prioriza:
+
+- `.appref-ms`
+- `.lnk`
+- `.exe`
+
+Y da preferencia a nombres como `Admisiones POS`.
+
 ```powershell
 python .\pos_login_poc.py `
   --app-path "C:\Users\SERVIDOR\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Interrapidisimo\Interrapidisimo POS" `

@@ -19,6 +19,12 @@ DEFAULT_TITLE_RE = r".*(Interrapidisimo|POS).*"
 DEFAULT_BUTTON_TITLE_RE = r"(?i).*(entrar|ingresar|login|aceptar).*"
 ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 LOCAL_ENV_PATH = Path(__file__).resolve().parent / ".env"
+LAUNCHABLE_SUFFIXES = (".appref-ms", ".lnk", ".exe")
+PREFERRED_APP_NAMES = (
+    "admisiones pos",
+    "interrapidisimo pos",
+    "pos",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,6 +86,8 @@ def resolve_app_path(raw_path: str) -> Path:
     candidates: List[Path] = []
 
     if raw.exists():
+        if raw.is_dir():
+            return resolve_app_from_directory(raw)
         return raw
 
     if raw.suffix:
@@ -104,6 +112,43 @@ def resolve_app_path(raw_path: str) -> Path:
         f"{candidate_list}\n"
         "Valida la ruta real en el otro PC."
     )
+
+
+def launchable_score(path: Path) -> Tuple[int, int, str]:
+    stem = path.stem.lower()
+    suffix = path.suffix.lower()
+
+    preferred_name_score = 99
+    for index, preferred_name in enumerate(PREFERRED_APP_NAMES):
+        if preferred_name in stem:
+            preferred_name_score = index
+            break
+
+    suffix_score_map = {
+        ".appref-ms": 0,
+        ".lnk": 1,
+        ".exe": 2,
+    }
+    suffix_score = suffix_score_map.get(suffix, 99)
+
+    return (preferred_name_score, suffix_score, stem)
+
+
+def resolve_app_from_directory(directory: Path) -> Path:
+    launchable_files = [
+        item
+        for item in directory.iterdir()
+        if item.is_file() and item.suffix.lower() in LAUNCHABLE_SUFFIXES
+    ]
+
+    if not launchable_files:
+        raise FileNotFoundError(
+            "La ruta del POS apunta a una carpeta, pero no se encontraron archivos lanzables dentro de ella. "
+            "Se esperaban extensiones .appref-ms, .lnk o .exe."
+        )
+
+    launchable_files.sort(key=launchable_score)
+    return launchable_files[0]
 
 
 def launch_app(app_path: Path) -> None:
