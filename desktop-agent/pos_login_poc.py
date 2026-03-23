@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import os
 import re
 import sys
@@ -28,6 +29,7 @@ PREFERRED_APP_NAMES = (
 )
 EXPLORER_CLASS_NAMES = {"CabinetWClass", "ExploreWClass"}
 LOGIN_HINT_TEXTS = ("usuario", "password", "contraseña", "entrar")
+user32 = ctypes.windll.user32
 
 
 def parse_args() -> argparse.Namespace:
@@ -91,6 +93,11 @@ def parse_args() -> argparse.Namespace:
         "--list-top-windows",
         action="store_true",
         help="Lista todas las ventanas top-level visibles y termina sin escribir nada.",
+    )
+    parser.add_argument(
+        "--list-raw-windows",
+        action="store_true",
+        help="Lista ventanas top-level con Win32 puro y termina sin escribir nada.",
     )
     parser.add_argument(
         "--inspect-only",
@@ -466,6 +473,34 @@ def describe_top_window(window, backend: str, index: int | None = None) -> str:
     )
 
 
+def get_window_text_raw(hwnd: int) -> str:
+    length = user32.GetWindowTextLengthW(hwnd)
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, buffer, length + 1)
+    return buffer.value
+
+
+def get_class_name_raw(hwnd: int) -> str:
+    buffer = ctypes.create_unicode_buffer(256)
+    user32.GetClassNameW(hwnd, buffer, 256)
+    return buffer.value
+
+
+def list_raw_windows() -> List[Tuple[int, str, str, bool]]:
+    windows: List[Tuple[int, str, str, bool]] = []
+    callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def callback(hwnd, _lparam):
+        title = get_window_text_raw(hwnd)
+        class_name = get_class_name_raw(hwnd)
+        is_visible = bool(user32.IsWindowVisible(hwnd))
+        windows.append((int(hwnd), title, class_name, is_visible))
+        return True
+
+    user32.EnumWindows(callback_type(callback), 0)
+    return windows
+
+
 def dedupe_controls(controls: Iterable) -> List:
     result: List = []
     seen: set[Tuple[int, int, int, int]] = set()
@@ -591,6 +626,16 @@ def main() -> int:
     if args.startup_delay > 0:
         print(f"[INFO] Esperando {args.startup_delay:.1f}s para el arranque inicial...")
         time.sleep(args.startup_delay)
+
+    if args.list_raw_windows:
+        print("[DEBUG] Ventanas top-level Win32:")
+        for index, (hwnd, title, class_name, is_visible) in enumerate(list_raw_windows()):
+            if not title and not is_visible:
+                continue
+            print(
+                f"[{index}] hwnd={hwnd} title={title!r} class={class_name or '-'} visible={is_visible}"
+            )
+        return 0
 
     if args.list_top_windows:
         all_windows = list_matching_windows(r".*", args.backend)
