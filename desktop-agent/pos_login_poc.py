@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -25,6 +26,8 @@ PREFERRED_APP_NAMES = (
     "interrapidisimo pos",
     "pos",
 )
+EXPLORER_CLASS_NAMES = {"CabinetWClass", "ExploreWClass"}
+LOGIN_HINT_TEXTS = ("usuario", "password", "contraseña", "entrar")
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,9 +72,20 @@ def parse_args() -> argparse.Namespace:
         help="Segundos maximos para esperar la ventana del POS.",
     )
     parser.add_argument(
+        "--startup-delay",
+        type=float,
+        default=3.0,
+        help="Segundos de espera inicial para que la app termine de abrir antes de buscar ventanas.",
+    )
+    parser.add_argument(
         "--print-controls",
         action="store_true",
         help="Imprime la jerarquia de controles detectada.",
+    )
+    parser.add_argument(
+        "--debug-top-windows",
+        action="store_true",
+        help="Imprime las ventanas top-level candidatas antes de escoger una.",
     )
     parser.add_argument(
         "--submit",
@@ -215,26 +229,63 @@ def backend_candidates(selected_backend: str) -> Sequence[str]:
     return (selected_backend,)
 
 
-def connect_window(title_re: str, selected_backend: str, timeout: float):
+def score_candidate_window(window) -> Tuple[int, int, int, str]:
+    class_penalty = 1 if get_window_class_name(window) in EXPLORER_CLASS_NAMES else 0
+    visible_edits = count_visible_edits(window)
+    login_hints = count_login_hints(window)
+    return (class_penalty, -visible_edits, -login_hints, window.window_text().lower())
+
+
+def list_matching_windows(title_re: str, selected_backend: str):
+    candidates = []
+
+    for backend in backend_candidates(selected_backend):
+        try:
+            desktop = Desktop(backend=backend)
+            for spec in desktop.windows():
+                try:
+                    wrapper = spec.wrapper_object()
+                    title = wrapper.window_text() or ""
+                    if not title:
+                        continue
+                    if not re.match(title_re, title):
+                        continue
+                    if not is_control_visible(wrapper):
+                        continue
+                    candidates.append((backend, wrapper))
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+    return candidates
+
+
+def connect_window(title_re: str, selected_backend: str, timeout: float, debug_top_windows: bool = False):
     deadline = time.time() + timeout
-    last_error: Exception | None = None
 
     while time.time() < deadline:
-        for backend in backend_candidates(selected_backend):
+        candidates = list_matching_windows(title_re, selected_backend)
+        if candidates:
+            candidates.sort(key=lambda item: score_candidate_window(item[1]))
+
+            if debug_top_windows:
+                print("[DEBUG] Ventanas top-level candidatas:")
+                for index, (backend, window) in enumerate(candidates):
+                    print(describe_top_window(window, backend, index))
+                print()
+
+            backend, selected_window = candidates[0]
             try:
-                desktop = Desktop(backend=backend)
-                window = desktop.window(title_re=title_re, found_index=0)
-                if window.exists(timeout=0.5):
-                    wrapper = window.wrapper_object()
-                    wrapper.set_focus()
-                    return backend, wrapper
-            except Exception as exc:  # pragma: no cover - runtime only
-                last_error = exc
+                selected_window.set_focus()
+            except Exception:
+                pass
+            return backend, selected_window
+
         time.sleep(0.5)
 
     raise TimeoutError(
-        f"No se encontro una ventana que matchee {title_re!r} en {timeout} segundos. "
-        f"Ultimo error: {last_error}"
+        f"No se encontro una ventana candidata que matchee {title_re!r} en {timeout} segundos."
     )
 
 
@@ -303,6 +354,14 @@ def get_control_auto_id(control) -> str:
         return ""
 
 
+def get_window_class_name(control) -> str:
+    try:
+        value = control.element_info.class_name
+        return value or ""
+    except Exception:
+        return ""
+
+
 def describe_control(control, index: int | None = None) -> str:
     rect = control.rectangle()
     prefix = f"[{index}] " if index is not None else ""
@@ -331,6 +390,64 @@ def print_control_debug(window) -> None:
     for index, control in enumerate(controls):
         print(describe_control(control, index))
     print()
+
+
+def count_visible_edits(control) -> int:
+    controls = []
+
+    try:
+        controls.extend(control.descendants(control_type="Edit"))
+    except Exception:
+        pass
+
+    try:
+        controls.extend(control.descendants(class_name="Edit"))
+    except Exception:
+        pass
+
+    controls = dedupe_controls(controls)
+    return sum(1 for item in controls if is_control_visible(item) and is_control_enabled(item))
+
+
+def count_login_hints(control) -> int:
+    score = 0
+    candidates = [control]
+
+    try:
+        candidates.extend(dedupe_controls(control.descendants()))
+    except Exception:
+        pass
+
+    for item in candidates:
+        fragments = [
+            get_control_text(item).strip().lower(),
+            get_control_auto_id(item).strip().lower(),
+            get_control_class_name(item).strip().lower(),
+        ]
+        for fragment in fragments:
+            if not fragment:
+                continue
+            for hint in LOGIN_HINT_TEXTS:
+                if hint in fragment:
+                    score += 1
+
+    return score
+
+
+def describe_top_window(window, backend: str, index: int | None = None) -> str:
+    rect = window.rectangle()
+    prefix = f"[{index}] " if index is not None else ""
+    return (
+        f"{prefix}"
+        f"backend={backend} "
+        f"title={window.window_text()!r} "
+        f"class={get_window_class_name(window) or '-'} "
+        f"visible={is_control_visible(window)} "
+        f"enabled={is_control_enabled(window)} "
+        f"visible_edits={count_visible_edits(window)} "
+        f"login_hints={count_login_hints(window)} "
+        f"rect=({rect.left},{rect.top},{rect.right},{rect.bottom})"
+    )
 
 
 def dedupe_controls(controls: Iterable) -> List:
@@ -455,15 +572,24 @@ def main() -> int:
     print(f"[INFO] Ruta resuelta: {app_path}")
     print("[INFO] Abriendo aplicacion...")
     launch_app(app_path)
+    if args.startup_delay > 0:
+        print(f"[INFO] Esperando {args.startup_delay:.1f}s para el arranque inicial...")
+        time.sleep(args.startup_delay)
 
     try:
-        backend, window = connect_window(args.title_re, args.backend, args.startup_timeout)
+        backend, window = connect_window(
+            args.title_re,
+            args.backend,
+            args.startup_timeout,
+            debug_top_windows=args.debug_top_windows,
+        )
     except TimeoutError as exc:
         print(f"[ERROR] {exc}")
         return 1
 
     print(f"[INFO] Ventana detectada con backend={backend}")
     print(f"[INFO] Titulo ventana: {window.window_text()!r}")
+    print(f"[INFO] Clase ventana: {get_window_class_name(window) or '-'}")
 
     if args.print_controls:
         print()
