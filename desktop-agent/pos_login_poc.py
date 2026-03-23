@@ -18,6 +18,7 @@ DEFAULT_APP_PATH = (
     r"\Interrapidisimo\Interrapidisimo POS"
 )
 DEFAULT_TITLE_RE = r".*(Interrapidisimo|POS).*"
+DEFAULT_RAW_TITLE_RE = r".*POS INTERRAPIDISIMO.*"
 DEFAULT_BUTTON_TITLE_RE = r"(?i).*(entrar|ingresar|login|aceptar).*"
 ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 LOCAL_ENV_PATH = Path(__file__).resolve().parent / ".env"
@@ -47,6 +48,11 @@ def parse_args() -> argparse.Namespace:
         "--title-re",
         default=DEFAULT_TITLE_RE,
         help="Regex para detectar la ventana del POS.",
+    )
+    parser.add_argument(
+        "--raw-title-re",
+        default=DEFAULT_RAW_TITLE_RE,
+        help="Regex para detectar la ventana real del POS desde Win32 puro.",
     )
     parser.add_argument(
         "--hwnd",
@@ -329,6 +335,42 @@ def connect_window_by_handle(hwnd: int, selected_backend: str):
     raise RuntimeError(
         f"No se pudo conectar a la ventana hwnd={hwnd} con backend={selected_backend}. "
         f"Ultimo error: {last_error}"
+    )
+
+
+def find_raw_window_handle(title_re: str) -> int | None:
+    pattern = re.compile(title_re)
+    candidates = []
+
+    for hwnd, title, class_name, is_visible in list_raw_windows():
+        if not is_visible:
+            continue
+        if not title:
+            continue
+        if class_name in EXPLORER_CLASS_NAMES:
+            continue
+        if not pattern.match(title):
+            continue
+        candidates.append((hwnd, title, class_name))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: (0 if "pos interrapidisimo" in item[1].lower() else 1, item[1].lower()))
+    return candidates[0][0]
+
+
+def connect_window_by_raw_title(raw_title_re: str, selected_backend: str, timeout: float):
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        hwnd = find_raw_window_handle(raw_title_re)
+        if hwnd is not None:
+            return connect_window_by_handle(hwnd, selected_backend)
+        time.sleep(0.5)
+
+    raise RuntimeError(
+        f"No se encontro una ventana Win32 visible que matchee {raw_title_re!r} en {timeout} segundos."
     )
 
 
@@ -674,6 +716,12 @@ def main() -> int:
     try:
         if args.hwnd:
             backend, window = connect_window_by_handle(args.hwnd, args.backend)
+        elif args.raw_title_re:
+            backend, window = connect_window_by_raw_title(
+                args.raw_title_re,
+                args.backend,
+                args.startup_timeout,
+            )
         else:
             backend, window = connect_window(
                 args.title_re,
