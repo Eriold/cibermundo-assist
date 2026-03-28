@@ -91,6 +91,21 @@ Instalar dependencias del monorepo:
 npm run install:all
 ```
 
+Ese comando instala primero con `ignore-scripts=true` y luego ejecuta solo la allowlist del proyecto para `esbuild`, `@swc/core`, `better-sqlite3`, `puppeteer` y `playwright`.
+
+Si instalas un modulo por separado, el flujo queda asi:
+
+```bash
+npm install --prefix backend
+npm run install:trusted --prefix backend
+
+npm install --prefix worker
+npm run install:trusted --prefix worker
+
+npm install --prefix frontend
+npm run install:trusted --prefix frontend
+```
+
 Levantar todo en modo desarrollo:
 
 ```bash
