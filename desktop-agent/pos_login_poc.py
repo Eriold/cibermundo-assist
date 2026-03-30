@@ -1236,7 +1236,11 @@ def score_window_by_hints(window, hints: Sequence[str]) -> Tuple[int, int, int, 
 
 
 def is_reprint_window(window) -> bool:
-    return count_text_hints(window, REPRINT_WINDOW_HINTS) > 0 and count_visible_edits(window) >= 1
+    return (
+        count_text_hints(window, REPRINT_WINDOW_HINTS) > 0
+        and find_reprint_number_edit(window) is not None
+        and find_search_button(window) is not None
+    )
 
 
 def find_window_by_hints(
@@ -1398,22 +1402,57 @@ def find_reprint_format_combo(window):
     return None
 
 
-def wait_for_reprint_window(selected_backend: str, expected_process_name: str | None, timeout: float):
-    result = find_window_by_hints(
-        selected_backend,
-        REPRINT_WINDOW_HINTS,
-        timeout,
-        expected_process_name=expected_process_name,
-        predicate=is_reprint_window,
-    )
-    if result is None:
-        raise TimeoutError(
-            f"No aparecio la ventana Reimpresion Guia en {timeout:.0f} segundos."
+def wait_for_reprint_window(
+    root_window,
+    selected_backend: str,
+    expected_process_name: str | None,
+    timeout: float,
+):
+    search_backend = "auto"
+    root_top_level = None
+    try:
+        root_top_level = root_window.top_level_parent()
+    except Exception:
+        root_top_level = root_window
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if root_top_level is not None and is_reprint_window(root_top_level):
+            try:
+                root_top_level.set_focus()
+            except Exception:
+                pass
+            return selected_backend, root_top_level
+
+        result = find_window_by_hints(
+            search_backend,
+            REPRINT_WINDOW_HINTS,
+            1.0,
+            expected_process_name=expected_process_name,
+            predicate=is_reprint_window,
         )
-    return result
+        if result is not None:
+            return result
+
+        time.sleep(0.5)
+
+    process_id = get_process_id(root_top_level)
+    print("[WARN] No se pudo confirmar la ventana Reimpresion Guia por estructura de controles.")
+    print_process_windows_snapshot(process_id, search_backend)
+    if root_top_level is not None:
+        hinted_controls = find_controls_with_hints(root_top_level, REPRINT_WINDOW_HINTS)
+        if hinted_controls:
+            print("[INFO] Controles con hints de Reimpresion Guia dentro de la ventana raiz:")
+            for index, control in enumerate(hinted_controls[:10]):
+                print(f"[INFO] {describe_control(control, index)}")
+
+    raise TimeoutError(
+        f"No aparecio la ventana Reimpresion Guia en {timeout:.0f} segundos."
+    )
 
 
 def wait_for_reprint_modal(root_window, selected_backend: str, expected_process_name: str | None, timeout: float):
+    search_backend = "auto"
     root_top_level = None
     try:
         root_top_level = root_window.top_level_parent()
@@ -1423,7 +1462,7 @@ def wait_for_reprint_modal(root_window, selected_backend: str, expected_process_
     deadline = time.time() + timeout
     while time.time() < deadline:
         result = find_window_by_hints(
-            selected_backend,
+            search_backend,
             REPRINT_FORMAT_MODAL_HINTS,
             1.0,
             expected_process_name=expected_process_name,
@@ -1435,6 +1474,10 @@ def wait_for_reprint_modal(root_window, selected_backend: str, expected_process_
             return selected_backend, root_top_level
 
         time.sleep(0.5)
+
+    process_id = get_process_id(root_top_level)
+    print("[WARN] No se pudo confirmar el modal SeleccionarReImpresionCW por estructura de controles.")
+    print_process_windows_snapshot(process_id, search_backend)
 
     raise TimeoutError(
         f"No aparecio el modal SeleccionarReImpresionCW en {timeout:.0f} segundos."
@@ -1520,6 +1563,7 @@ def complete_reprint_flow(
 
     try:
         reprint_backend, reprint_window = wait_for_reprint_window(
+            main_window,
             selected_backend,
             expected_process_name,
             reprint_window_timeout,
