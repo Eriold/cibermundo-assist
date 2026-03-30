@@ -51,6 +51,13 @@ MAIN_WINDOW_HINTS = (
     "reclame oficina",
 )
 REPRINT_HINTS = ("reimpresion guias",)
+REPRINT_WINDOW_HINTS = ("reimpresion guia",)
+REPRINT_NUMBER_HINTS = ("numero",)
+REPRINT_SEARCH_HINTS = ("buscar",)
+REPRINT_FORMAT_MODAL_HINTS = ("seleccione el formato a reimprimir", "prueba de entrega")
+REPRINT_ACCEPT_HINTS = ("aceptar",)
+DEFAULT_REPRINT_TRACKING_NUMBER = "240048399888"
+DEFAULT_REPRINT_FORMAT = "TIRILLA"
 APP_PATH_ENV_KEYS = ("POS_EXE_PATH",)
 USERNAME_ENV_KEYS = ("POS_USER", "APX_USER")
 PASSWORD_ENV_KEYS = ("POS_PASS", "APX_PASS")
@@ -182,6 +189,28 @@ def parse_args() -> argparse.Namespace:
         "--open-reprint",
         action="store_true",
         help="Una vez detectada la ventana principal, entra a Reimpresion de Guias.",
+    )
+    parser.add_argument(
+        "--reprint-tracking-number",
+        default=DEFAULT_REPRINT_TRACKING_NUMBER,
+        help="Numero de guia para la prueba de Reimpresion de Guias.",
+    )
+    parser.add_argument(
+        "--reprint-format",
+        default=DEFAULT_REPRINT_FORMAT,
+        help="Formato a seleccionar en el modal de reimpresion.",
+    )
+    parser.add_argument(
+        "--reprint-window-timeout",
+        type=float,
+        default=60.0,
+        help="Segundos maximos para esperar la ventana Reimpresion Guia.",
+    )
+    parser.add_argument(
+        "--reprint-modal-timeout",
+        type=float,
+        default=60.0,
+        help="Segundos maximos para esperar el modal SeleccionarReImpresionCW.",
     )
     return parser.parse_args()
 
@@ -1117,6 +1146,97 @@ def find_controls_with_hints(window, hints: Sequence[str]) -> List:
     return matches
 
 
+def find_visible_controls(window, control_type: str | None = None, class_name: str | None = None) -> List:
+    controls = []
+
+    try:
+        if control_type is not None:
+            controls.extend(window.descendants(control_type=control_type))
+    except Exception:
+        pass
+
+    try:
+        if class_name is not None:
+            controls.extend(window.descendants(class_name=class_name))
+    except Exception:
+        pass
+
+    controls = dedupe_controls(controls)
+    controls = [control for control in controls if is_control_visible(control)]
+    controls.sort(key=control_rect_key)
+    return controls
+
+
+def find_nearest_control_by_hints(window, label_hints: Sequence[str], controls: Sequence):
+    labels = find_controls_with_hints(window, label_hints)
+    if not labels or not controls:
+        return None
+
+    best_pair = None
+    for label in labels:
+        for control in controls:
+            distance = control_distance(label, control)
+            if best_pair is None or distance < best_pair[0]:
+                best_pair = (distance, control)
+
+    if best_pair is None:
+        return None
+
+    return best_pair[1]
+
+
+def window_matches_hints(window, hints: Sequence[str]) -> bool:
+    title_match = contains_normalized_hint(get_control_text(window), hints)
+    body_match = count_text_hints(window, hints) > 0
+    return title_match or body_match
+
+
+def score_window_by_hints(window, hints: Sequence[str]) -> Tuple[int, int, int, str]:
+    hint_count = count_text_hints(window, hints)
+    title_bonus = 1 if contains_normalized_hint(get_control_text(window), hints) else 0
+    visible_edits = count_visible_edits(window)
+    return (-title_bonus, -hint_count, visible_edits, window.window_text().lower())
+
+
+def is_reprint_window(window) -> bool:
+    return count_text_hints(window, REPRINT_WINDOW_HINTS) > 0 and count_visible_edits(window) >= 1
+
+
+def find_window_by_hints(
+    selected_backend: str,
+    hints: Sequence[str],
+    timeout: float,
+    expected_process_name: str | None = None,
+    predicate=None,
+):
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        candidates = []
+        for backend, window in list_matching_windows(r".*", selected_backend):
+            process_id = get_process_id(window)
+            if expected_process_name and not process_name_matches(process_id, expected_process_name):
+                continue
+            if not window_matches_hints(window, hints):
+                continue
+            if predicate is not None and not predicate(window):
+                continue
+            candidates.append((backend, window))
+
+        if candidates:
+            candidates.sort(key=lambda item: score_window_by_hints(item[1], hints))
+            backend, window = candidates[0]
+            try:
+                window.set_focus()
+            except Exception:
+                pass
+            return backend, window
+
+        time.sleep(1.0)
+
+    return None
+
+
 def build_action_targets(control) -> List[Tuple[str, object]]:
     targets: List[Tuple[str, object]] = []
     seen_handles: set[int] = set()
@@ -1160,6 +1280,280 @@ def try_activate_control(control, label: str) -> str | None:
                 print(f"[WARN] Fallo accion {action_name} sobre {label} ({target_label}): {exc}")
 
     return None
+
+
+def set_combo_selection(control, value: str) -> str | None:
+    strategies = [
+        ("select", lambda current: current.select(value)),
+        ("type", lambda current: current.type_keys(value, with_spaces=True, set_foreground=True)),
+    ]
+
+    for strategy_name, strategy in strategies:
+        try:
+            focus_control(control)
+            strategy(control)
+            return strategy_name
+        except Exception as exc:
+            print(f"[WARN] Fallo seleccion {strategy_name} del combo: {exc}")
+
+    try:
+        focus_control(control)
+        control.click_input()
+        time.sleep(0.5)
+    except Exception as exc:
+        print(f"[WARN] No se pudo expandir el combo con click_input: {exc}")
+    else:
+        popup_candidates = find_controls_with_hints(control.top_level_parent(), (value,))
+        for popup_candidate in popup_candidates:
+            strategy = try_activate_control(popup_candidate, "reprint_format_option")
+            if strategy is not None:
+                return f"popup:{strategy}"
+
+    return None
+
+
+def find_search_button(window):
+    buttons = find_visible_controls(window, control_type="Button", class_name="Button")
+    buttons = [button for button in buttons if is_control_enabled(button)]
+    hinted_buttons = [button for button in buttons if control_matches_hints(button, REPRINT_SEARCH_HINTS)]
+    if hinted_buttons:
+        return hinted_buttons[0]
+    return find_nearest_control_by_hints(window, REPRINT_SEARCH_HINTS, buttons)
+
+
+def find_accept_button(window):
+    buttons = find_visible_controls(window, control_type="Button", class_name="Button")
+    buttons = [button for button in buttons if is_control_enabled(button)]
+    hinted_buttons = [button for button in buttons if control_matches_hints(button, REPRINT_ACCEPT_HINTS)]
+    if hinted_buttons:
+        return hinted_buttons[0]
+    return find_nearest_control_by_hints(window, REPRINT_ACCEPT_HINTS, buttons)
+
+
+def find_reprint_number_edit(window):
+    edits = find_visible_controls(window, control_type="Edit", class_name="Edit")
+    edits = [edit for edit in edits if is_control_enabled(edit)]
+    if not edits:
+        return None
+    if len(edits) == 1:
+        return edits[0]
+    return find_nearest_control_by_hints(window, REPRINT_NUMBER_HINTS, edits) or edits[0]
+
+
+def find_reprint_format_combo(window):
+    combos = find_visible_controls(window, control_type="ComboBox", class_name="ComboBox")
+    combos = [combo for combo in combos if is_control_enabled(combo)]
+    if combos:
+        return combos[0]
+
+    combo_like = []
+    for control in iter_visible_controls(window):
+        control_type = normalize_text(get_control_type_name(control))
+        class_name = normalize_text(get_control_class_name(control))
+        if "combo" in control_type or "combo" in class_name:
+            if is_control_enabled(control):
+                combo_like.append(control)
+
+    if combo_like:
+        combo_like.sort(key=control_rect_key)
+        return combo_like[0]
+
+    return None
+
+
+def wait_for_reprint_window(selected_backend: str, expected_process_name: str | None, timeout: float):
+    result = find_window_by_hints(
+        selected_backend,
+        REPRINT_WINDOW_HINTS,
+        timeout,
+        expected_process_name=expected_process_name,
+        predicate=is_reprint_window,
+    )
+    if result is None:
+        raise TimeoutError(
+            f"No aparecio la ventana Reimpresion Guia en {timeout:.0f} segundos."
+        )
+    return result
+
+
+def wait_for_reprint_modal(root_window, selected_backend: str, expected_process_name: str | None, timeout: float):
+    root_top_level = None
+    try:
+        root_top_level = root_window.top_level_parent()
+    except Exception:
+        root_top_level = root_window
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        result = find_window_by_hints(
+            selected_backend,
+            REPRINT_FORMAT_MODAL_HINTS,
+            1.0,
+            expected_process_name=expected_process_name,
+        )
+        if result is not None:
+            return result
+
+        if root_top_level is not None and count_text_hints(root_top_level, REPRINT_FORMAT_MODAL_HINTS) > 0:
+            return selected_backend, root_top_level
+
+        time.sleep(0.5)
+
+    raise TimeoutError(
+        f"No aparecio el modal SeleccionarReImpresionCW en {timeout:.0f} segundos."
+    )
+
+
+def find_modal_anchor(window):
+    anchors = find_controls_with_hints(window, REPRINT_FORMAT_MODAL_HINTS)
+    if not anchors:
+        return None
+    anchors.sort(key=control_rect_key)
+    return anchors[0]
+
+
+def find_controls_near_anchor(controls: Sequence, anchor, max_vertical_gap: int = 220) -> List:
+    if anchor is None:
+        return list(controls)
+
+    anchor_x, anchor_y = control_center(anchor)
+    scored = []
+    for control in controls:
+        control_x, control_y = control_center(control)
+        vertical_gap = abs(control_y - anchor_y)
+        horizontal_gap = abs(control_x - anchor_x)
+        if vertical_gap > max_vertical_gap:
+            continue
+        scored.append((vertical_gap, horizontal_gap, control))
+
+    scored.sort(key=lambda item: (item[0], item[1]))
+    return [item[2] for item in scored]
+
+
+def find_reprint_format_combo_in_modal(window):
+    anchor = find_modal_anchor(window)
+    combos = find_visible_controls(window, control_type="ComboBox", class_name="ComboBox")
+    combos = [combo for combo in combos if is_control_enabled(combo)]
+
+    hinted_combos = [
+        combo
+        for combo in combos
+        if control_matches_hints(combo, REPRINT_FORMAT_MODAL_HINTS)
+    ]
+    if hinted_combos:
+        return hinted_combos[0]
+
+    nearby_combos = find_controls_near_anchor(combos, anchor)
+    if nearby_combos:
+        return nearby_combos[0]
+
+    return find_reprint_format_combo(window)
+
+
+def find_accept_button_in_modal(window):
+    anchor = find_modal_anchor(window)
+    buttons = find_visible_controls(window, control_type="Button", class_name="Button")
+    buttons = [button for button in buttons if is_control_enabled(button)]
+
+    hinted_buttons = [button for button in buttons if control_matches_hints(button, REPRINT_ACCEPT_HINTS)]
+    if hinted_buttons:
+        nearby_hinted = find_controls_near_anchor(hinted_buttons, anchor)
+        if nearby_hinted:
+            return nearby_hinted[0]
+        return hinted_buttons[0]
+
+    nearby_buttons = find_controls_near_anchor(buttons, anchor)
+    if nearby_buttons:
+        return nearby_buttons[0]
+
+    return find_accept_button(window)
+
+
+def complete_reprint_flow(
+    main_window,
+    selected_backend: str,
+    expected_process_name: str | None,
+    tracking_number: str,
+    reprint_format: str,
+    reprint_window_timeout: float,
+    reprint_modal_timeout: float,
+) -> bool:
+    if not open_reprint_guides(main_window):
+        return False
+
+    try:
+        reprint_backend, reprint_window = wait_for_reprint_window(
+            selected_backend,
+            expected_process_name,
+            reprint_window_timeout,
+        )
+    except TimeoutError as exc:
+        print(f"[ERROR] {exc}")
+        return False
+
+    print_selected_window("Ventana Reimpresion Guia", reprint_backend, reprint_window)
+
+    number_edit = find_reprint_number_edit(reprint_window)
+    if number_edit is None:
+        print("[ERROR] No se encontro el campo Numero en Reimpresion Guia.")
+        return False
+
+    print(f"[INFO] Campo Numero detectado: {describe_control(number_edit)}")
+    set_text(number_edit, tracking_number)
+    print(f"[INFO] Numero de guia cargado: {tracking_number}")
+
+    search_button = find_search_button(reprint_window)
+    if search_button is None:
+        print("[ERROR] No se encontro el boton Buscar en Reimpresion Guia.")
+        return False
+
+    print(f"[INFO] Boton Buscar detectado: {describe_control(search_button)}")
+    search_strategy = try_activate_control(search_button, "reprint_search")
+    if search_strategy is None:
+        print("[ERROR] No se pudo activar el boton Buscar.")
+        return False
+
+    print(f"[INFO] Buscar ejecutado usando estrategia: {search_strategy}")
+
+    try:
+        modal_backend, modal_window = wait_for_reprint_modal(
+            reprint_window,
+            selected_backend,
+            expected_process_name,
+            reprint_modal_timeout,
+        )
+    except TimeoutError as exc:
+        print(f"[ERROR] {exc}")
+        return False
+
+    print_selected_window("Modal SeleccionarReImpresionCW", modal_backend, modal_window)
+
+    format_combo = find_reprint_format_combo_in_modal(modal_window)
+    if format_combo is None:
+        print("[ERROR] No se encontro el combo del formato de reimpresion.")
+        return False
+
+    print(f"[INFO] Combo formato detectado: {describe_control(format_combo)}")
+    combo_strategy = set_combo_selection(format_combo, reprint_format)
+    if combo_strategy is None:
+        print(f"[ERROR] No se pudo seleccionar el formato {reprint_format!r}.")
+        return False
+
+    print(f"[INFO] Formato seleccionado usando estrategia: {combo_strategy}")
+
+    accept_button = find_accept_button_in_modal(modal_window)
+    if accept_button is None:
+        print("[ERROR] No se encontro el boton Aceptar en el modal de reimpresion.")
+        return False
+
+    print(f"[INFO] Boton Aceptar detectado: {describe_control(accept_button)}")
+    accept_strategy = try_activate_control(accept_button, "reprint_accept")
+    if accept_strategy is None:
+        print("[ERROR] No se pudo activar el boton Aceptar del modal.")
+        return False
+
+    print(f"[INFO] Modal aceptado usando estrategia: {accept_strategy}")
+    return True
 
 
 def wait_for_main_window(
@@ -1414,7 +1808,15 @@ def main() -> int:
                 print()
                 print_control_debug(window)
             if args.open_reprint:
-                return 0 if open_reprint_guides(window) else 1
+                return 0 if complete_reprint_flow(
+                    window,
+                    backend,
+                    args.main_process_name,
+                    args.reprint_tracking_number,
+                    args.reprint_format,
+                    args.reprint_window_timeout,
+                    args.reprint_modal_timeout,
+                ) else 1
             return 0
 
     try:
@@ -1453,7 +1855,15 @@ def main() -> int:
                     print()
                     print_control_debug(window)
                 if args.open_reprint:
-                    return 0 if open_reprint_guides(window) else 1
+                    return 0 if complete_reprint_flow(
+                        window,
+                        backend,
+                        args.main_process_name,
+                        args.reprint_tracking_number,
+                        args.reprint_format,
+                        args.reprint_window_timeout,
+                        args.reprint_modal_timeout,
+                    ) else 1
                 return 0
 
             login_window_result = find_login_window(args.title_re, args.backend)
@@ -1579,7 +1989,15 @@ def main() -> int:
                 print_control_debug(main_window)
 
             if args.open_reprint:
-                return 0 if open_reprint_guides(main_window) else 1
+                return 0 if complete_reprint_flow(
+                    main_window,
+                    main_backend,
+                    args.main_process_name,
+                    args.reprint_tracking_number,
+                    args.reprint_format,
+                    args.reprint_window_timeout,
+                    args.reprint_modal_timeout,
+                ) else 1
         else:
             observe_after_submit(window, process_id, args.title_re, backend, args.post_submit_delay)
     else:

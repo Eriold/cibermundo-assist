@@ -119,7 +119,9 @@ Eso hace:
 - si ya esta abierta, no relanza ni reloguea el POS
 - si no esta abierta, intenta login
 - espera hasta 20 minutos a que cargue la ventana principal
-- cuando aparezca, intenta entrar a `Reimpresion de Guias`
+- cuando aparezca, entra a `Reimpresion de Guias`
+- usa la guia de prueba `240048399888`
+- en el modal de formato intenta seleccionar `TIRILLA` y luego `Aceptar`
 
 Si quieres dejar mas tiempo de observacion despues del login:
 
