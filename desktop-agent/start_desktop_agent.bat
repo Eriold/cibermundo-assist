@@ -21,7 +21,7 @@ goto :usage_error
 call :prepare_python
 if errorlevel 1 goto :finish
 echo [INFO] Ejecutando bot POS con submit...
-"%PYTHON_EXE%" ".\pos_login_poc.py" --submit
+"%PYTHON_EXE%" ".\pos_login_poc.py" --submit --post-submit-delay 12
 set "EXIT_CODE=%ERRORLEVEL%"
 goto :finish
 

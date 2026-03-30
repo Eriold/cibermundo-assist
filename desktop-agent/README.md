@@ -36,6 +36,7 @@ Comportamiento:
 - doble clic ejecuta el modo operativo actual: login POS con `--submit`
 - si no existe `.venv`, lo crea automaticamente
 - si falta `pywinauto`, instala `requirements.txt`
+- despues del submit observa el estado del POS durante unos segundos y reporta lo que encuentre
 - deja la consola abierta al final para ver errores o confirmaciones
 
 Modos opcionales desde consola:
@@ -91,6 +92,12 @@ Cuando ya veas que detecta bien los controles:
 python .\pos_login_poc.py `
   --app-path "C:\Users\SERVIDOR\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Interrapidisimo\Interrapidisimo POS" `
   --submit
+```
+
+Si quieres dejar mas tiempo de observacion despues del login:
+
+```powershell
+python .\pos_login_poc.py --submit --post-submit-delay 15
 ```
 
 ## Override manual opcional

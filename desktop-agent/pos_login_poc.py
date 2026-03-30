@@ -132,6 +132,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Hace click en el boton Entrar o manda Enter despues de llenar la clave.",
     )
+    parser.add_argument(
+        "--post-submit-delay",
+        type=float,
+        default=8.0,
+        help="Segundos para observar el estado del POS despues de enviar el login.",
+    )
     return parser.parse_args()
 
 
@@ -744,6 +750,86 @@ def find_login_button(window, button_title_re: str):
     return None
 
 
+def get_window_handle(control) -> int | None:
+    try:
+        handle = int(control.handle)
+        return handle if handle > 0 else None
+    except Exception:
+        return None
+
+
+def focus_control(control) -> None:
+    try:
+        control.set_focus()
+    except Exception:
+        pass
+
+
+def try_login_button_actions(button) -> str | None:
+    actions = [
+        ("invoke", lambda: button.invoke()),
+        ("click_input", lambda: button.click_input()),
+        ("click", lambda: button.click()),
+        ("space", lambda: button.type_keys("{SPACE}", set_foreground=True)),
+        ("enter_on_button", lambda: button.type_keys("{ENTER}", set_foreground=True)),
+    ]
+
+    for action_name, action in actions:
+        try:
+            focus_control(button)
+            action()
+            return action_name
+        except Exception as exc:
+            print(f"[WARN] Fallo accion {action_name} sobre boton login: {exc}")
+
+    return None
+
+
+def try_enter_fallback(password_edit) -> str | None:
+    actions = [
+        ("enter_on_password", lambda: password_edit.type_keys("{ENTER}", set_foreground=True)),
+        ("global_enter", lambda: send_keys("{ENTER}")),
+    ]
+
+    for action_name, action in actions:
+        try:
+            focus_control(password_edit)
+            action()
+            return action_name
+        except Exception as exc:
+            print(f"[WARN] Fallo fallback {action_name}: {exc}")
+
+    return None
+
+
+def print_post_submit_snapshot(title_re: str, selected_backend: str) -> None:
+    candidates = list_matching_windows(title_re, selected_backend)
+    candidates.sort(key=lambda item: score_candidate_window(item[1]))
+
+    if not candidates:
+        print("[INFO] No se encontraron ventanas top-level visibles que coincidan despues del submit.")
+        return
+
+    print("[INFO] Ventanas visibles despues del submit:")
+    for index, (backend, window) in enumerate(candidates[:5]):
+        print(f"[INFO] {describe_top_window(window, backend, index)}")
+
+
+def observe_after_submit(window, title_re: str, selected_backend: str, delay_seconds: float) -> None:
+    if delay_seconds > 0:
+        print(f"[INFO] Observando el POS durante {delay_seconds:.1f}s despues del submit...")
+        time.sleep(delay_seconds)
+
+    hwnd = get_window_handle(window)
+    if hwnd is not None and bool(user32.IsWindow(hwnd)):
+        print("[INFO] La ventana original del login sigue existiendo despues del submit.")
+        print(f"[INFO] Estado actual: {describe_top_window(window, selected_backend)}")
+    else:
+        print("[INFO] La ventana original del login ya no existe despues del submit.")
+
+    print_post_submit_snapshot(title_re, selected_backend)
+
+
 def main() -> int:
     args = parse_args()
     username, password, credential_sources = resolve_credentials(args)
@@ -856,19 +942,27 @@ def main() -> int:
     if args.submit:
         print("[INFO] Intentando enviar login...")
         button = find_login_button(window, args.button_title_re)
+        submit_strategy = None
+
         if button is not None:
-            try:
-                button.click_input()
-                print("[INFO] Click en boton de login ejecutado.")
-            except Exception as exc:
-                print(f"[WARN] No se pudo hacer click en el boton: {exc}")
-                password_edit.set_focus()
-                password_edit.type_keys("{ENTER}", set_foreground=True)
-                print("[INFO] Se envio Enter como fallback.")
+            print(f"[INFO] Boton login detectado: {describe_control(button)}")
+            submit_strategy = try_login_button_actions(button)
+            if submit_strategy is not None:
+                print(f"[INFO] Login enviado usando estrategia: {submit_strategy}")
+            else:
+                print("[WARN] Ninguna accion directa sobre el boton funciono. Se intentara Enter fallback.")
         else:
-            password_edit.set_focus()
-            password_edit.type_keys("{ENTER}", set_foreground=True)
-            print("[INFO] No se detecto boton claro. Se envio Enter como fallback.")
+            print("[WARN] No se detecto boton claro de login.")
+
+        if submit_strategy is None:
+            submit_strategy = try_enter_fallback(password_edit)
+            if submit_strategy is not None:
+                print(f"[INFO] Login enviado usando fallback: {submit_strategy}")
+            else:
+                print("[ERROR] No se pudo disparar el login ni con boton ni con Enter.")
+                return 1
+
+        observe_after_submit(window, args.title_re, backend, args.post_submit_delay)
     else:
         print("[INFO] Credenciales cargadas. No se envio login porque no se paso --submit.")
 
