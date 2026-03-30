@@ -25,11 +25,40 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Launcher .bat
+
+Ya existe un launcher para doble clic:
+
+- [start_desktop_agent.bat](c:/Users/eriold/Desktop/Frontend/adm-rep/desktop-agent/start_desktop_agent.bat)
+
+Comportamiento:
+
+- doble clic ejecuta el modo operativo actual: login POS con `--submit`
+- si no existe `.venv`, lo crea automaticamente
+- si falta `pywinauto`, instala `requirements.txt`
+- deja la consola abierta al final para ver errores o confirmaciones
+
+Modos opcionales desde consola:
+
+```cmd
+start_desktop_agent.bat submit
+start_desktop_agent.bat fill
+start_desktop_agent.bat inspect
+```
+
 ## Primer intento recomendado
 
 Usa primero `--print-controls` y sin `--submit`.
 
-Si el repo ya tiene `APX_USER` y `APX_PASS` en el `.env` raiz, el script los toma automaticamente y no necesitas pasarlos a mano.
+El script ya acepta estas variables para no hardcodear credenciales o ruta:
+
+- `POS_EXE_PATH`
+- `POS_USER`
+- `POS_PASS`
+- `APX_USER`
+- `APX_PASS`
+
+`POS_USER/POS_PASS` tienen prioridad sobre `APX_USER/APX_PASS`.
 
 Si `--app-path` apunta a una carpeta, el script intenta buscar dentro el archivo real de lanzamiento del POS.
 Prioriza:

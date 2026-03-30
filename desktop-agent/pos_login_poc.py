@@ -34,13 +34,22 @@ user32 = ctypes.windll.user32
 USERNAME_AUTO_IDS = ("LoginPos_txtUsername",)
 PASSWORD_AUTO_IDS = ("LoginPos_txtPassword",)
 LOGIN_BUTTON_AUTO_IDS = ("LoginPos_btnLogin",)
+APP_PATH_ENV_KEYS = ("POS_EXE_PATH",)
+USERNAME_ENV_KEYS = ("POS_USER", "APX_USER")
+PASSWORD_ENV_KEYS = ("POS_PASS", "APX_PASS")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="POC para abrir Interrapidisimo POS y completar el login con pywinauto."
     )
-    parser.add_argument("--app-path", default=DEFAULT_APP_PATH, help="Ruta al .exe, .lnk o .appref-ms.")
+    parser.add_argument(
+        "--app-path",
+        help=(
+            "Ruta al .exe, .lnk o .appref-ms. "
+            "Si se omite, intenta POS_EXE_PATH y luego la ruta por defecto."
+        ),
+    )
     parser.add_argument(
         "--backend",
         default="auto",
@@ -230,28 +239,67 @@ def load_env_values() -> Dict[str, str]:
     return values
 
 
+def resolve_from_sources(
+    cli_value: str | None,
+    cli_label: str,
+    env_keys: Sequence[str],
+    env_values: Dict[str, str],
+) -> Tuple[str | None, str | None]:
+    if cli_value:
+        return cli_value, cli_label
+
+    for env_key in env_keys:
+        env_value = os.environ.get(env_key)
+        if env_value:
+            return env_value, f"variable de entorno {env_key}"
+
+    for env_key in env_keys:
+        env_value = env_values.get(env_key)
+        if env_value:
+            return env_value, f"{env_key} desde .env raiz o desktop-agent/.env"
+
+    return None, None
+
+
 def resolve_credentials(args: argparse.Namespace) -> Tuple[str | None, str | None, List[str]]:
     env_values = load_env_values()
     sources: List[str] = []
 
-    username = args.username or os.environ.get("APX_USER") or env_values.get("APX_USER")
-    password = args.password or os.environ.get("APX_PASS") or env_values.get("APX_PASS")
+    username, username_source = resolve_from_sources(
+        args.username,
+        "--username",
+        USERNAME_ENV_KEYS,
+        env_values,
+    )
+    password, password_source = resolve_from_sources(
+        args.password,
+        "--password",
+        PASSWORD_ENV_KEYS,
+        env_values,
+    )
 
-    if args.username:
-        sources.append("username desde --username")
-    elif os.environ.get("APX_USER"):
-        sources.append("username desde variable de entorno APX_USER")
-    elif env_values.get("APX_USER"):
-        sources.append(f"username desde {ROOT_ENV_PATH if ROOT_ENV_PATH.exists() else LOCAL_ENV_PATH}")
+    if username_source:
+        sources.append(f"username desde {username_source}")
 
-    if args.password:
-        sources.append("password desde --password")
-    elif os.environ.get("APX_PASS"):
-        sources.append("password desde variable de entorno APX_PASS")
-    elif env_values.get("APX_PASS"):
-        sources.append(f"password desde {ROOT_ENV_PATH if ROOT_ENV_PATH.exists() else LOCAL_ENV_PATH}")
+    if password_source:
+        sources.append(f"password desde {password_source}")
 
     return username, password, sources
+
+
+def resolve_app_path_input(args: argparse.Namespace) -> Tuple[str, str]:
+    env_values = load_env_values()
+    app_path, app_path_source = resolve_from_sources(
+        args.app_path,
+        "--app-path",
+        APP_PATH_ENV_KEYS,
+        env_values,
+    )
+
+    if app_path:
+        return app_path, app_path_source or "--app-path"
+
+    return DEFAULT_APP_PATH, "ruta por defecto embebida en el script"
 
 
 def backend_candidates(selected_backend: str) -> Sequence[str]:
@@ -699,13 +747,15 @@ def find_login_button(window, button_title_re: str):
 def main() -> int:
     args = parse_args()
     username, password, credential_sources = resolve_credentials(args)
+    app_path_input, app_path_source = resolve_app_path_input(args)
 
     try:
-        app_path = resolve_app_path(args.app_path)
+        app_path = resolve_app_path(app_path_input)
     except FileNotFoundError as exc:
         print(f"[ERROR] {exc}")
         return 1
 
+    print(f"[INFO] Fuente de ruta POS: {app_path_source}")
     print(f"[INFO] Ruta resuelta: {app_path}")
     print("[INFO] Abriendo aplicacion...")
     launch_app(app_path)
