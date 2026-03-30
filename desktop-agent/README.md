@@ -2,10 +2,10 @@
 
 Este folder contiene un POC minimo para validar la primera parte del flujo del POS:
 
-1. abrir la aplicacion
-2. detectar la ventana de login
-3. llenar usuario y password
-4. opcionalmente enviar el login
+1. detectar si la ventana principal autenticada ya esta abierta
+2. si no esta abierta, abrir la aplicacion e intentar login
+3. esperar la carga larga del POS hasta que aparezca la ventana principal
+4. entrar a `Reimpresion de Guias`
 
 ## Recomendacion de Python
 
@@ -33,7 +33,11 @@ Ya existe un launcher para doble clic:
 
 Comportamiento:
 
-- doble clic ejecuta el modo operativo actual: login POS con `--submit`
+- doble clic ejecuta el flujo principal actual:
+  - usar la ventana principal si ya esta abierta
+  - si no, hacer login
+  - esperar hasta 20 minutos la carga del POS
+  - abrir `Reimpresion de Guias`
 - si no existe `.venv`, lo crea automaticamente
 - si falta `pywinauto`, instala `requirements.txt`
 - despues del submit observa el estado del POS durante unos segundos y reporta lo que encuentre
@@ -42,10 +46,13 @@ Comportamiento:
 Modos opcionales desde consola:
 
 ```cmd
+start_desktop_agent.bat run
 start_desktop_agent.bat submit
 start_desktop_agent.bat fill
 start_desktop_agent.bat inspect
 ```
+
+`submit` queda como alias de `run`.
 
 ## Primer intento recomendado
 
@@ -93,6 +100,25 @@ python .\pos_login_poc.py `
   --app-path "C:\Users\SERVIDOR\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Interrapidisimo\Interrapidisimo POS" `
   --submit
 ```
+
+## Flujo principal nuevo
+
+Para el ejercicio actual, este es el flujo recomendado:
+
+```powershell
+python .\pos_login_poc.py `
+  --ensure-main-window `
+  --open-reprint `
+  --main-window-timeout 1200
+```
+
+Eso hace:
+
+- primero intenta detectar la ventana principal autenticada
+- si ya esta abierta, no relanza ni reloguea el POS
+- si no esta abierta, intenta login
+- espera hasta 20 minutos a que cargue la ventana principal
+- cuando aparezca, intenta entrar a `Reimpresion de Guias`
 
 Si quieres dejar mas tiempo de observacion despues del login:
 

@@ -5,10 +5,10 @@ cd /d "%~dp0"
 title Desktop Agent POS Launcher
 
 set "MODE=%~1"
-if not defined MODE set "MODE=submit"
+if not defined MODE set "MODE=run"
 
-if /I "%MODE%"=="submit" goto :run_submit
-if /I "%MODE%"=="run" goto :run_submit
+if /I "%MODE%"=="submit" goto :run_main
+if /I "%MODE%"=="run" goto :run_main
 if /I "%MODE%"=="fill" goto :run_fill
 if /I "%MODE%"=="inspect" goto :run_inspect
 if /I "%MODE%"=="help" goto :usage_ok
@@ -17,11 +17,11 @@ if /I "%MODE%"=="menu" goto :usage
 echo [WARN] Modo no reconocido: %MODE%
 goto :usage_error
 
-:run_submit
+:run_main
 call :prepare_python
 if errorlevel 1 goto :finish
-echo [INFO] Ejecutando bot POS con submit...
-"%PYTHON_EXE%" ".\pos_login_poc.py" --submit --post-submit-delay 12
+echo [INFO] Ejecutando flujo POS: detectar ventana principal, login si hace falta y abrir Reimpresion de Guias...
+"%PYTHON_EXE%" ".\pos_login_poc.py" --ensure-main-window --open-reprint --post-submit-delay 12 --main-window-timeout 1200
 set "EXIT_CODE=%ERRORLEVEL%"
 goto :finish
 
@@ -117,16 +117,18 @@ set "EXIT_CODE=1"
 echo.
 echo Uso:
 echo   start_desktop_agent.bat
+echo   start_desktop_agent.bat run
 echo   start_desktop_agent.bat submit
 echo   start_desktop_agent.bat fill
 echo   start_desktop_agent.bat inspect
 echo.
 echo Modos:
-echo   submit   Login POS con click en Entrar o Enter fallback.
+echo   run      Usa ventana principal si ya esta abierta; si no, hace login y abre Reimpresion de Guias.
+echo   submit   Alias de run.
 echo   fill     Carga credenciales pero no envia login.
 echo   inspect  Solo imprime controles y no escribe credenciales.
 echo.
-echo Doble clic ejecuta el modo submit.
+echo Doble clic ejecuta el modo run.
 
 :finish
 if not defined EXIT_CODE set "EXIT_CODE=%ERRORLEVEL%"

@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
@@ -20,6 +21,7 @@ DEFAULT_APP_PATH = (
 DEFAULT_TITLE_RE = r".*(Interrapidisimo|POS).*"
 DEFAULT_RAW_TITLE_RE = r".*POS INTERRAPIDISIMO.*"
 DEFAULT_BUTTON_TITLE_RE = r"(?i).*(entrar|ingresar|login|aceptar).*"
+DEFAULT_MAIN_WINDOW_TITLE_RE = r".*POS INTERRAPIDISIMO.*"
 ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 LOCAL_ENV_PATH = Path(__file__).resolve().parent / ".env"
 LAUNCHABLE_SUFFIXES = (".appref-ms", ".lnk", ".exe")
@@ -35,6 +37,17 @@ kernel32 = ctypes.windll.kernel32
 USERNAME_AUTO_IDS = ("LoginPos_txtUsername",)
 PASSWORD_AUTO_IDS = ("LoginPos_txtPassword",)
 LOGIN_BUTTON_AUTO_IDS = ("LoginPos_btnLogin",)
+MAIN_WINDOW_HINTS = (
+    "facturar",
+    "cajas",
+    "giros",
+    "admision de envios",
+    "captura manual",
+    "reimpresion guias",
+    "mis pagos",
+    "reclame oficina",
+)
+REPRINT_HINTS = ("reimpresion guias",)
 APP_PATH_ENV_KEYS = ("POS_EXE_PATH",)
 USERNAME_ENV_KEYS = ("POS_USER", "APX_USER")
 PASSWORD_ENV_KEYS = ("POS_PASS", "APX_PASS")
@@ -68,6 +81,11 @@ def parse_args() -> argparse.Namespace:
         "--raw-title-re",
         default=DEFAULT_RAW_TITLE_RE,
         help="Regex para detectar la ventana real del POS desde Win32 puro.",
+    )
+    parser.add_argument(
+        "--main-title-re",
+        default=DEFAULT_MAIN_WINDOW_TITLE_RE,
+        help="Regex para detectar la ventana principal autenticada del POS.",
     )
     parser.add_argument(
         "--hwnd",
@@ -140,6 +158,22 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=8.0,
         help="Segundos para observar el estado del POS despues de enviar el login.",
+    )
+    parser.add_argument(
+        "--ensure-main-window",
+        action="store_true",
+        help="Si la ventana principal ya esta abierta, la usa; si no, intenta login y espera a que aparezca.",
+    )
+    parser.add_argument(
+        "--main-window-timeout",
+        type=float,
+        default=1200.0,
+        help="Segundos maximos para esperar la ventana principal despues del login.",
+    )
+    parser.add_argument(
+        "--open-reprint",
+        action="store_true",
+        help="Una vez detectada la ventana principal, entra a Reimpresion de Guias.",
     )
     return parser.parse_args()
 
@@ -311,6 +345,26 @@ def resolve_app_path_input(args: argparse.Namespace) -> Tuple[str, str]:
     return DEFAULT_APP_PATH, "ruta por defecto embebida en el script"
 
 
+def normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    without_accents = "".join(char for char in normalized if not unicodedata.combining(char))
+    collapsed = " ".join(without_accents.casefold().split())
+    return collapsed
+
+
+def contains_normalized_hint(fragment: str, hints: Sequence[str]) -> bool:
+    normalized_fragment = normalize_text(fragment)
+    if not normalized_fragment:
+        return False
+
+    for hint in hints:
+        normalized_hint = normalize_text(hint)
+        if normalized_hint and normalized_hint in normalized_fragment:
+            return True
+
+    return False
+
+
 def backend_candidates(selected_backend: str) -> Sequence[str]:
     if selected_backend == "auto":
         return ("uia", "win32")
@@ -322,6 +376,61 @@ def score_candidate_window(window) -> Tuple[int, int, int, str]:
     visible_edits = count_visible_edits(window)
     login_hints = count_login_hints(window)
     return (class_penalty, -visible_edits, -login_hints, window.window_text().lower())
+
+
+def is_authenticated_main_window(window) -> bool:
+    return count_main_window_hints(window) > 0 and count_visible_edits(window) == 0
+
+
+def is_login_window(window) -> bool:
+    return count_visible_edits(window) >= 2 or count_login_hints(window) > 0
+
+
+def score_main_window(window) -> Tuple[int, int, int, str]:
+    class_penalty = 1 if get_window_class_name(window) in EXPLORER_CLASS_NAMES else 0
+    main_hints = count_main_window_hints(window)
+    visible_edits = count_visible_edits(window)
+    return (class_penalty, -main_hints, visible_edits, window.window_text().lower())
+
+
+def find_main_window(title_re: str, selected_backend: str):
+    candidates = []
+
+    for backend, window in list_matching_windows(title_re, selected_backend):
+        if not is_authenticated_main_window(window):
+            continue
+        candidates.append((backend, window))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: score_main_window(item[1]))
+    backend, window = candidates[0]
+    try:
+        window.set_focus()
+    except Exception:
+        pass
+    return backend, window
+
+
+def find_login_window(title_re: str, selected_backend: str):
+    candidates = []
+
+    for backend, window in list_matching_windows(title_re, selected_backend):
+        if not is_login_window(window):
+            continue
+        candidates.append((backend, window))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: score_candidate_window(item[1]))
+    backend, window = candidates[0]
+    try:
+        window.set_focus()
+    except Exception:
+        pass
+    return backend, window
 
 
 def list_matching_windows(title_re: str, selected_backend: str):
@@ -555,6 +664,10 @@ def count_visible_edits(control) -> int:
 
 
 def count_login_hints(control) -> int:
+    return count_text_hints(control, LOGIN_HINT_TEXTS)
+
+
+def count_text_hints(control, hints: Sequence[str]) -> int:
     score = 0
     candidates = [control]
 
@@ -570,13 +683,14 @@ def count_login_hints(control) -> int:
             get_control_class_name(item).strip().lower(),
         ]
         for fragment in fragments:
-            if not fragment:
-                continue
-            for hint in LOGIN_HINT_TEXTS:
-                if hint in fragment:
-                    score += 1
+            if contains_normalized_hint(fragment, hints):
+                score += 1
 
     return score
+
+
+def count_main_window_hints(control) -> int:
+    return count_text_hints(control, MAIN_WINDOW_HINTS)
 
 
 def describe_top_window(window, backend: str, index: int | None = None) -> str:
@@ -597,6 +711,7 @@ def describe_top_window(window, backend: str, index: int | None = None) -> str:
         f"enabled={is_control_enabled(window)} "
         f"visible_edits={count_visible_edits(window)} "
         f"login_hints={count_login_hints(window)} "
+        f"main_hints={count_main_window_hints(window)} "
         f"rect=({rect.left},{rect.top},{rect.right},{rect.bottom})"
     )
 
@@ -814,6 +929,134 @@ def focus_control(control) -> None:
         pass
 
 
+def get_parent_control(control):
+    try:
+        return control.parent()
+    except Exception:
+        return None
+
+
+def iter_visible_controls(window) -> List:
+    controls = [window]
+
+    try:
+        controls.extend(dedupe_controls(window.descendants()))
+    except Exception:
+        pass
+
+    visible_controls = [control for control in dedupe_controls(controls) if is_control_visible(control)]
+    visible_controls.sort(key=control_rect_key)
+    return visible_controls
+
+
+def find_controls_with_hints(window, hints: Sequence[str]) -> List:
+    matches = []
+
+    for control in iter_visible_controls(window):
+        fragments = [
+            get_control_text(control),
+            get_control_auto_id(control),
+            get_control_class_name(control),
+            get_control_type_name(control),
+        ]
+
+        if any(contains_normalized_hint(fragment, hints) for fragment in fragments):
+            matches.append(control)
+
+    return matches
+
+
+def build_action_targets(control) -> List[Tuple[str, object]]:
+    targets: List[Tuple[str, object]] = []
+    seen_handles: set[int] = set()
+    current = control
+
+    for depth in range(4):
+        if current is None:
+            break
+
+        handle = get_window_handle(current)
+        if handle is not None and handle in seen_handles:
+            current = get_parent_control(current)
+            continue
+
+        if handle is not None:
+            seen_handles.add(handle)
+
+        targets.append((f"depth_{depth}", current))
+        current = get_parent_control(current)
+
+    return targets
+
+
+def try_activate_control(control, label: str) -> str | None:
+    actions = [
+        ("invoke", lambda current: current.invoke()),
+        ("click_input", lambda current: current.click_input()),
+        ("double_click_input", lambda current: current.double_click_input()),
+        ("click", lambda current: current.click()),
+        ("space", lambda current: current.type_keys("{SPACE}", set_foreground=True)),
+        ("enter", lambda current: current.type_keys("{ENTER}", set_foreground=True)),
+    ]
+
+    for target_label, target in build_action_targets(control):
+        for action_name, action in actions:
+            try:
+                focus_control(target)
+                action(target)
+                return f"{label}:{target_label}:{action_name}"
+            except Exception as exc:
+                print(f"[WARN] Fallo accion {action_name} sobre {label} ({target_label}): {exc}")
+
+    return None
+
+
+def wait_for_main_window(title_re: str, selected_backend: str, timeout: float):
+    deadline = time.time() + timeout
+    next_progress_log = time.time()
+
+    while time.time() < deadline:
+        result = find_main_window(title_re, selected_backend)
+        if result is not None:
+            return result
+
+        current_time = time.time()
+        if current_time >= next_progress_log:
+            remaining = max(0.0, deadline - current_time)
+            print(
+                "[INFO] La ventana principal aun no aparece. "
+                f"Seguimos esperando... restante ~{remaining:.0f}s"
+            )
+            next_progress_log = current_time + 30.0
+
+        time.sleep(2.0)
+
+    raise TimeoutError(
+        f"No aparecio la ventana principal autenticada en {timeout:.0f} segundos."
+    )
+
+
+def open_reprint_guides(window) -> bool:
+    candidates = find_controls_with_hints(window, REPRINT_HINTS)
+    if not candidates:
+        print("[ERROR] No se encontro un control visible que matchee Reimpresion de Guias.")
+        return False
+
+    candidates.sort(key=control_rect_key)
+    print("[INFO] Candidatos para Reimpresion de Guias:")
+    for index, control in enumerate(candidates[:5]):
+        print(f"[INFO] {describe_control(control, index)}")
+
+    for control in candidates:
+        strategy = try_activate_control(control, "reprint")
+        if strategy is not None:
+            print(f"[INFO] Se activo Reimpresion de Guias usando estrategia: {strategy}")
+            return True
+
+    print("[ERROR] No se pudo activar Reimpresion de Guias con ninguno de los candidatos.")
+    return False
+
+
 def try_login_button_actions(button) -> str | None:
     actions = [
         ("invoke", lambda: button.invoke()),
@@ -963,24 +1206,19 @@ def observe_after_submit(
     print_post_submit_snapshot(title_re, selected_backend)
 
 
+def print_selected_window(label: str, backend: str, window) -> int | None:
+    print(f"[INFO] {label} detectada con backend={backend}")
+    print(f"[INFO] Titulo ventana: {window.window_text()!r}")
+    print(f"[INFO] Clase ventana: {get_window_class_name(window) or '-'}")
+    process_id = get_process_id(window)
+    if process_id is not None:
+        print(f"[INFO] PID ventana: {process_id}")
+    return process_id
+
+
 def main() -> int:
     args = parse_args()
-    username, password, credential_sources = resolve_credentials(args)
-    app_path_input, app_path_source = resolve_app_path_input(args)
-
-    try:
-        app_path = resolve_app_path(app_path_input)
-    except FileNotFoundError as exc:
-        print(f"[ERROR] {exc}")
-        return 1
-
-    print(f"[INFO] Fuente de ruta POS: {app_path_source}")
-    print(f"[INFO] Ruta resuelta: {app_path}")
-    print("[INFO] Abriendo aplicacion...")
-    launch_app(app_path)
-    if args.startup_delay > 0:
-        print(f"[INFO] Esperando {args.startup_delay:.1f}s para el arranque inicial...")
-        time.sleep(args.startup_delay)
+    should_submit = args.submit or args.ensure_main_window or args.open_reprint
 
     if args.list_raw_windows:
         print("[DEBUG] Ventanas top-level Win32:")
@@ -1000,8 +1238,63 @@ def main() -> int:
             print(describe_top_window(window, backend, index))
         return 0
 
+    username, password, credential_sources = resolve_credentials(args)
+    app_path_input, app_path_source = resolve_app_path_input(args)
+
+    if args.ensure_main_window or args.open_reprint:
+        existing_main_window = find_main_window(args.main_title_re, args.backend)
+        if existing_main_window is not None:
+            backend, window = existing_main_window
+            print("[INFO] La ventana principal del POS ya estaba abierta.")
+            print_selected_window("Ventana principal autenticada", backend, window)
+            if args.print_controls:
+                print()
+                print_control_debug(window)
+            if args.open_reprint:
+                return 0 if open_reprint_guides(window) else 1
+            return 0
+
     try:
-        if args.hwnd:
+        app_path = resolve_app_path(app_path_input)
+    except FileNotFoundError as exc:
+        print(f"[ERROR] {exc}")
+        return 1
+
+    print(f"[INFO] Fuente de ruta POS: {app_path_source}")
+    print(f"[INFO] Ruta resuelta: {app_path}")
+
+    login_window_result = None
+    if args.ensure_main_window or args.open_reprint:
+        login_window_result = find_login_window(args.title_re, args.backend)
+        if login_window_result is not None:
+            print("[INFO] Se encontro una ventana de login ya abierta. No se relanzara la app.")
+
+    if login_window_result is None:
+        print("[INFO] Abriendo aplicacion...")
+        launch_app(app_path)
+        if args.startup_delay > 0:
+            print(f"[INFO] Esperando {args.startup_delay:.1f}s para el arranque inicial...")
+            time.sleep(args.startup_delay)
+
+        if args.ensure_main_window or args.open_reprint:
+            existing_main_window = find_main_window(args.main_title_re, args.backend)
+            if existing_main_window is not None:
+                backend, window = existing_main_window
+                print("[INFO] La ventana principal aparecio sin necesidad de reloguear.")
+                print_selected_window("Ventana principal autenticada", backend, window)
+                if args.print_controls:
+                    print()
+                    print_control_debug(window)
+                if args.open_reprint:
+                    return 0 if open_reprint_guides(window) else 1
+                return 0
+
+            login_window_result = find_login_window(args.title_re, args.backend)
+
+    try:
+        if login_window_result is not None:
+            backend, window = login_window_result
+        elif args.hwnd:
             backend, window = connect_window_by_handle(args.hwnd, args.backend)
         elif args.raw_title_re:
             backend, window = connect_window_by_raw_title(
@@ -1020,12 +1313,7 @@ def main() -> int:
         print(f"[ERROR] {exc}")
         return 1
 
-    print(f"[INFO] Ventana detectada con backend={backend}")
-    print(f"[INFO] Titulo ventana: {window.window_text()!r}")
-    print(f"[INFO] Clase ventana: {get_window_class_name(window) or '-'}")
-    process_id = get_process_id(window)
-    if process_id is not None:
-        print(f"[INFO] PID ventana login: {process_id}")
+    process_id = print_selected_window("Ventana login", backend, window)
 
     if args.print_controls:
         print()
@@ -1039,6 +1327,9 @@ def main() -> int:
         print(f"[INFO] Credenciales resueltas: {', '.join(credential_sources)}")
 
     if not username and not password:
+        if should_submit:
+            print("[ERROR] No hay credenciales disponibles para continuar con el login del POS.")
+            return 1
         print("[INFO] No se recibieron credenciales. POC termina despues de abrir la app.")
         return 0
 
@@ -1075,7 +1366,7 @@ def main() -> int:
         print(f"[INFO] Escribiendo password en Edit[{args.password_index}]...")
         set_text(password_edit, password)
 
-    if args.submit:
+    if should_submit:
         print("[INFO] Intentando enviar login...")
         button = find_login_button(window, args.button_title_re)
         submit_strategy = None
@@ -1098,7 +1389,31 @@ def main() -> int:
                 print("[ERROR] No se pudo disparar el login ni con boton ni con Enter.")
                 return 1
 
-        observe_after_submit(window, process_id, args.title_re, backend, args.post_submit_delay)
+        if args.ensure_main_window or args.open_reprint:
+            try:
+                print(
+                    "[INFO] Esperando la ventana principal autenticada despues del login. "
+                    f"Timeout configurado: {args.main_window_timeout:.0f}s"
+                )
+                main_backend, main_window = wait_for_main_window(
+                    args.main_title_re,
+                    args.backend,
+                    args.main_window_timeout,
+                )
+            except TimeoutError as exc:
+                print(f"[WARN] {exc}")
+                observe_after_submit(window, process_id, args.main_title_re, backend, args.post_submit_delay)
+                return 1
+
+            print_selected_window("Ventana principal autenticada", main_backend, main_window)
+            if args.print_controls:
+                print()
+                print_control_debug(main_window)
+
+            if args.open_reprint:
+                return 0 if open_reprint_guides(main_window) else 1
+        else:
+            observe_after_submit(window, process_id, args.title_re, backend, args.post_submit_delay)
     else:
         print("[INFO] Credenciales cargadas. No se envio login porque no se paso --submit.")
 
