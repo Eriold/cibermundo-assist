@@ -70,6 +70,7 @@ PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 STILL_ACTIVE = 259
 OCR_AMOUNT_MIN = 1000
 OCR_AMOUNT_MAX = 10000000
+PREVIEW_DEBUG_IMAGE_PATH = Path(__file__).resolve().parent / "ocr_preview_debug.png"
 WINDOWS_OCR_POWERSHELL_SCRIPT = r"""
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
@@ -1914,11 +1915,13 @@ def format_currency_amount(value: int) -> str:
     return f"$ {value:,}".replace(",", ".")
 
 
-def capture_window_image(window):
+def capture_window_images(window):
+    images = []
+
     try:
         image = window.capture_as_image()
         if image is not None:
-            return image
+            images.append(("capture_as_image", image))
     except Exception as exc:
         print(f"[WARN] Fallo capture_as_image sobre la vista previa: {exc}")
 
@@ -1926,14 +1929,17 @@ def capture_window_image(window):
         from PIL import ImageGrab
     except Exception as exc:
         print(f"[WARN] No se pudo importar ImageGrab para capturar la vista previa: {exc}")
-        return None
+        return images
 
     try:
         rect = window.rectangle()
-        return ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom))
+        screen_image = ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom))
+        if screen_image is not None:
+            images.append(("image_grab", screen_image))
     except Exception as exc:
         print(f"[WARN] Fallo ImageGrab sobre la vista previa: {exc}")
-        return None
+
+    return images
 
 
 def get_ocr_engine():
@@ -2025,9 +2031,21 @@ def build_preview_ocr_variants(image):
         (max(1, threshold.width * 2), max(1, threshold.height * 2)),
         resample=Image.Resampling.LANCZOS,
     )
+    content_rgb = content.convert("RGB")
+    content_enlarged = content_rgb.resize(
+        (max(1, content_rgb.width * 2), max(1, content_rgb.height * 2)),
+        resample=Image.Resampling.LANCZOS,
+    )
+    full_rgb = image.convert("RGB")
+    full_enlarged = full_rgb.resize(
+        (max(1, full_rgb.width * 2), max(1, full_rgb.height * 2)),
+        resample=Image.Resampling.LANCZOS,
+    )
 
     variants = []
     for base_label, base_image in (
+        ("full", full_enlarged),
+        ("content", content_enlarged),
         ("boosted", enlarged),
         ("threshold", threshold_enlarged),
     ):
@@ -2038,24 +2056,25 @@ def build_preview_ocr_variants(image):
     return variants
 
 
-def collect_ocr_texts(image):
+def collect_ocr_texts(captured_images):
     collected = []
     seen_texts: set[Tuple[str, str]] = set()
 
-    for variant_label, variant_image in build_preview_ocr_variants(image):
-        windows_text = run_windows_ocr_on_image(variant_image)
-        if not windows_text:
-            continue
+    for capture_label, image in captured_images:
+        for variant_label, variant_image in build_preview_ocr_variants(image):
+            windows_text = run_windows_ocr_on_image(variant_image)
+            if not windows_text:
+                continue
 
-        for text_line in windows_text.splitlines():
-            text = text_line.strip()
-            if not text:
-                continue
-            dedupe_key = (variant_label, text)
-            if dedupe_key in seen_texts:
-                continue
-            seen_texts.add(dedupe_key)
-            collected.append((variant_label, text))
+            for text_line in windows_text.splitlines():
+                text = text_line.strip()
+                if not text:
+                    continue
+                dedupe_key = (f"{capture_label}:{variant_label}", text)
+                if dedupe_key in seen_texts:
+                    continue
+                seen_texts.add(dedupe_key)
+                collected.append((f"{capture_label}:{variant_label}", text))
 
     if collected:
         return collected
@@ -2072,27 +2091,28 @@ def collect_ocr_texts(image):
         print(f"[WARN] No se pudo inicializar RapidOCR: {exc}")
         return []
 
-    for variant_label, variant_image in build_preview_ocr_variants(image):
-        try:
-            result, _elapsed = engine(np.array(variant_image))
-        except Exception as exc:
-            print(f"[WARN] Fallo OCR en variante {variant_label}: {exc}")
-            continue
+    for capture_label, image in captured_images:
+        for variant_label, variant_image in build_preview_ocr_variants(image):
+            try:
+                result, _elapsed = engine(np.array(variant_image))
+            except Exception as exc:
+                print(f"[WARN] Fallo OCR en variante {capture_label}:{variant_label}: {exc}")
+                continue
 
-        if not result:
-            continue
+            if not result:
+                continue
 
-        for item in result:
-            if not item or len(item) < 2:
-                continue
-            text = str(item[1]).strip()
-            if not text:
-                continue
-            dedupe_key = (variant_label, text)
-            if dedupe_key in seen_texts:
-                continue
-            seen_texts.add(dedupe_key)
-            collected.append((variant_label, text))
+            for item in result:
+                if not item or len(item) < 2:
+                    continue
+                text = str(item[1]).strip()
+                if not text:
+                    continue
+                dedupe_key = (f"{capture_label}:{variant_label}", text)
+                if dedupe_key in seen_texts:
+                    continue
+                seen_texts.add(dedupe_key)
+                collected.append((f"{capture_label}:{variant_label}", text))
 
     return collected
 
@@ -2166,36 +2186,80 @@ def find_preview_capture_window(root_window, expected_process_name: str | None, 
     return "auto", root_top_level
 
 
+def save_preview_debug_image(captured_images) -> Path | None:
+    if not captured_images:
+        return None
+
+    preferred = None
+    for capture_label, image in captured_images:
+        if capture_label == "image_grab":
+            preferred = image
+            break
+
+    if preferred is None:
+        preferred = captured_images[0][1]
+
+    try:
+        preferred.save(PREVIEW_DEBUG_IMAGE_PATH)
+        return PREVIEW_DEBUG_IMAGE_PATH
+    except Exception as exc:
+        print(f"[WARN] No se pudo guardar la captura debug de OCR: {exc}")
+        return None
+
+
 def try_extract_preview_amount(root_window, expected_process_name: str | None, tracking_number: str, timeout: float):
     print(f"[INFO] Esperando la vista previa de reimpresion para OCR. Timeout configurado: {timeout:.0f}s")
     preview_backend, preview_window = find_preview_capture_window(root_window, expected_process_name, timeout)
     print_selected_window("Vista previa reimpresion", preview_backend, preview_window)
+    deadline = time.time() + timeout
+    next_progress_log = time.time()
+    last_captured_images = []
+    last_ocr_texts = []
 
-    image = capture_window_image(preview_window)
-    if image is None:
-        print("[WARN] No se pudo capturar la vista previa para OCR.")
-        return None
+    while time.time() < deadline:
+        captured_images = capture_window_images(preview_window)
+        last_captured_images = captured_images
+        if not captured_images:
+            time.sleep(1.0)
+            continue
 
-    ocr_texts = collect_ocr_texts(image)
-    if not ocr_texts:
-        print("[WARN] OCR no devolvio texto util desde la vista previa.")
-        return None
+        ocr_texts = collect_ocr_texts(captured_images)
+        last_ocr_texts = ocr_texts
+        amount_match = find_amount_in_ocr_texts(ocr_texts)
+        if amount_match is not None:
+            amount_value, raw_text = amount_match
+            print(
+                "[INFO] Valor a Cobrar detectado por OCR "
+                f"para guia {tracking_number}: {format_currency_amount(amount_value)} "
+                f"(valor_numerico={amount_value}, texto={raw_text!r})"
+            )
+            return amount_value
 
-    amount_match = find_amount_in_ocr_texts(ocr_texts)
-    if amount_match is None:
-        print("[WARN] No se encontro un monto confiable en la vista previa.")
+        current_time = time.time()
+        if current_time >= next_progress_log:
+            remaining = max(0.0, deadline - current_time)
+            capture_summary = ", ".join(
+                f"{label}:{image.size[0]}x{image.size[1]}" for label, image in captured_images
+            )
+            print(
+                "[INFO] Aun no se pudo leer Valor a Cobrar desde la vista previa. "
+                f"Seguimos intentando... restante ~{remaining:.0f}s. Capturas={capture_summary or 'ninguna'}"
+            )
+            next_progress_log = current_time + 5.0
+
+        time.sleep(1.0)
+
+    print("[WARN] OCR no devolvio un monto util desde la vista previa.")
+    debug_path = save_preview_debug_image(last_captured_images)
+    if debug_path is not None:
+        print(f"[INFO] Captura debug OCR guardada en: {debug_path}")
+
+    if last_ocr_texts:
         print("[INFO] OCR detecto estos textos:")
-        for index, (variant_label, text) in enumerate(ocr_texts[:12]):
+        for index, (variant_label, text) in enumerate(last_ocr_texts[:12]):
             print(f"[INFO] [{index}] {variant_label}: {text!r}")
-        return None
 
-    amount_value, raw_text = amount_match
-    print(
-        "[INFO] Valor a Cobrar detectado por OCR "
-        f"para guia {tracking_number}: {format_currency_amount(amount_value)} "
-        f"(valor_numerico={amount_value}, texto={raw_text!r})"
-    )
-    return amount_value
+    return None
 
 
 def main() -> int:
