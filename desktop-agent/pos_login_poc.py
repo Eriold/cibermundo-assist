@@ -4,7 +4,9 @@ import argparse
 import ctypes
 import os
 import re
+import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from pathlib import Path
@@ -68,6 +70,30 @@ PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 STILL_ACTIVE = 259
 OCR_AMOUNT_MIN = 1000
 OCR_AMOUNT_MAX = 10000000
+WINDOWS_OCR_POWERSHELL_SCRIPT = r"""
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+$null = [Windows.Storage.Streams.IRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+function Await($AsyncOperation, $ResultType) {
+    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+        $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1
+    })[0]
+    $netTask = $asTaskGeneric.MakeGenericMethod($ResultType).Invoke($null, @($AsyncOperation))
+    $netTask.Wait(-1) | Out-Null
+    return $netTask.Result
+}
+$path = $args[0]
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($path)) ([Windows.Storage.StorageFile])
+$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+$ocrResult = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+$ocrResult.Text
+"""
 
 
 def parse_args() -> argparse.Namespace:
@@ -1921,6 +1947,48 @@ def get_ocr_engine():
     return _OCR_ENGINE
 
 
+def run_windows_ocr_on_image(image) -> str | None:
+    image_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(prefix="pos_preview_", suffix=".png", delete=False) as temp_file:
+            image_path = temp_file.name
+
+        image.save(image_path)
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                WINDOWS_OCR_POWERSHELL_SCRIPT,
+                image_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            stdout = (result.stdout or "").strip()
+            details = stderr or stdout or f"exit_code={result.returncode}"
+            print(f"[WARN] Fallo OCR nativo de Windows: {details}")
+            return None
+
+        text = (result.stdout or "").strip()
+        return text or None
+    except Exception as exc:
+        print(f"[WARN] No se pudo ejecutar OCR nativo de Windows: {exc}")
+        return None
+    finally:
+        if image_path and os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+            except Exception:
+                pass
+
+
 def extract_amount_candidates(text: str) -> List[int]:
     matches = re.findall(r"(?<!\d)(?:\$?\s*)?(\d{1,3}(?:[.,]\d{3})+|\d{4,8})(?!\d)", text or "")
     candidates: List[int] = []
@@ -1971,6 +2039,27 @@ def build_preview_ocr_variants(image):
 
 
 def collect_ocr_texts(image):
+    collected = []
+    seen_texts: set[Tuple[str, str]] = set()
+
+    for variant_label, variant_image in build_preview_ocr_variants(image):
+        windows_text = run_windows_ocr_on_image(variant_image)
+        if not windows_text:
+            continue
+
+        for text_line in windows_text.splitlines():
+            text = text_line.strip()
+            if not text:
+                continue
+            dedupe_key = (variant_label, text)
+            if dedupe_key in seen_texts:
+                continue
+            seen_texts.add(dedupe_key)
+            collected.append((variant_label, text))
+
+    if collected:
+        return collected
+
     try:
         import numpy as np
     except Exception as exc:
@@ -1982,9 +2071,6 @@ def collect_ocr_texts(image):
     except Exception as exc:
         print(f"[WARN] No se pudo inicializar RapidOCR: {exc}")
         return []
-
-    collected = []
-    seen_texts: set[Tuple[str, str]] = set()
 
     for variant_label, variant_image in build_preview_ocr_variants(image):
         try:
