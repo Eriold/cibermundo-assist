@@ -38,8 +38,9 @@ Comportamiento:
   - si no, hacer login
   - esperar hasta 20 minutos la carga del POS
   - abrir `Reimpresion de Guias`
+  - abrir la vista previa y leer `Valor a Cobrar` por OCR
 - si no existe `.venv`, lo crea automaticamente
-- si falta `pywinauto`, instala `requirements.txt`
+- si faltan `pywinauto` o las dependencias OCR, instala `requirements.txt`
 - despues del submit observa el estado del POS durante unos segundos y reporta lo que encuentre
 - deja la consola abierta al final para ver errores o confirmaciones
 
@@ -122,11 +123,18 @@ Eso hace:
 - cuando aparezca, entra a `Reimpresion de Guias`
 - usa la guia de prueba `240048399888`
 - en el modal de formato intenta seleccionar `TIRILLA` y luego `Aceptar`
+- cuando abre la vista previa, intenta leer `Valor a Cobrar` con OCR y lo imprime en consola
 
 Si quieres dejar mas tiempo de observacion despues del login:
 
 ```powershell
 python .\pos_login_poc.py --submit --post-submit-delay 15
+```
+
+Si quieres dar mas tiempo para detectar y leer la vista previa:
+
+```powershell
+python .\pos_login_poc.py --ensure-main-window --open-reprint --preview-ocr-timeout 30
 ```
 
 En la siguiente validacion post-login fijate sobre todo en estas lineas de consola:

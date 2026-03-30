@@ -56,13 +56,18 @@ REPRINT_NUMBER_HINTS = ("numero",)
 REPRINT_SEARCH_HINTS = ("buscar",)
 REPRINT_FORMAT_MODAL_HINTS = ("seleccione el formato a reimprimir", "prueba de entrega")
 REPRINT_ACCEPT_HINTS = ("aceptar",)
+PREVIEW_CLOSE_HINTS = ("cerrar",)
+VALUE_AMOUNT_HINTS = ("valor a cobrar", "valor cobrar", "cobrar", "valor")
 DEFAULT_REPRINT_TRACKING_NUMBER = "240048399888"
 DEFAULT_REPRINT_FORMAT = "TIRILLA"
+DEFAULT_PREVIEW_OCR_TIMEOUT = 20.0
 APP_PATH_ENV_KEYS = ("POS_EXE_PATH",)
 USERNAME_ENV_KEYS = ("POS_USER", "APX_USER")
 PASSWORD_ENV_KEYS = ("POS_PASS", "APX_PASS")
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 STILL_ACTIVE = 259
+OCR_AMOUNT_MIN = 1000
+OCR_AMOUNT_MAX = 10000000
 
 
 def parse_args() -> argparse.Namespace:
@@ -211,6 +216,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=60.0,
         help="Segundos maximos para esperar el modal SeleccionarReImpresionCW.",
+    )
+    parser.add_argument(
+        "--preview-ocr-timeout",
+        type=float,
+        default=DEFAULT_PREVIEW_OCR_TIMEOUT,
+        help="Segundos maximos para esperar la vista previa y leer Valor a Cobrar por OCR.",
     )
     return parser.parse_args()
 
@@ -1557,6 +1568,7 @@ def complete_reprint_flow(
     reprint_format: str,
     reprint_window_timeout: float,
     reprint_modal_timeout: float,
+    preview_ocr_timeout: float,
 ) -> bool:
     if not open_reprint_guides(main_window):
         return False
@@ -1637,6 +1649,7 @@ def complete_reprint_flow(
         return False
 
     print(f"[INFO] Modal aceptado usando estrategia: {accept_strategy}")
+    try_extract_preview_amount(main_window, expected_process_name, tracking_number, preview_ocr_timeout)
     return True
 
 
@@ -1853,6 +1866,252 @@ def print_selected_window(label: str, backend: str, window) -> int | None:
     return process_id
 
 
+_OCR_ENGINE = None
+
+
+def get_foreground_window_wrapper(selected_backend: str):
+    try:
+        hwnd = int(user32.GetForegroundWindow())
+    except Exception:
+        return None
+
+    if not hwnd:
+        return None
+
+    try:
+        return connect_window_by_handle(hwnd, selected_backend)
+    except Exception:
+        return None
+
+
+def format_currency_amount(value: int) -> str:
+    return f"$ {value:,}".replace(",", ".")
+
+
+def capture_window_image(window):
+    try:
+        image = window.capture_as_image()
+        if image is not None:
+            return image
+    except Exception as exc:
+        print(f"[WARN] Fallo capture_as_image sobre la vista previa: {exc}")
+
+    try:
+        from PIL import ImageGrab
+    except Exception as exc:
+        print(f"[WARN] No se pudo importar ImageGrab para capturar la vista previa: {exc}")
+        return None
+
+    try:
+        rect = window.rectangle()
+        return ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom))
+    except Exception as exc:
+        print(f"[WARN] Fallo ImageGrab sobre la vista previa: {exc}")
+        return None
+
+
+def get_ocr_engine():
+    global _OCR_ENGINE
+    if _OCR_ENGINE is not None:
+        return _OCR_ENGINE
+
+    from rapidocr_onnxruntime import RapidOCR
+
+    _OCR_ENGINE = RapidOCR()
+    return _OCR_ENGINE
+
+
+def extract_amount_candidates(text: str) -> List[int]:
+    matches = re.findall(r"(?<!\d)(?:\$?\s*)?(\d{1,3}(?:[.,]\d{3})+|\d{4,8})(?!\d)", text or "")
+    candidates: List[int] = []
+
+    for raw in matches:
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if not digits:
+            continue
+        value = int(digits)
+        if OCR_AMOUNT_MIN <= value <= OCR_AMOUNT_MAX:
+            candidates.append(value)
+
+    return candidates
+
+
+def build_preview_ocr_variants(image):
+    from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+
+    width, height = image.size
+    left = int(width * 0.04)
+    top = int(height * 0.10)
+    right = int(width * 0.96)
+    bottom = int(height * 0.96)
+    content = image.crop((left, top, right, bottom))
+    grayscale = ImageOps.autocontrast(ImageOps.grayscale(content))
+    grayscale = grayscale.filter(ImageFilter.SHARPEN)
+    boosted = ImageEnhance.Contrast(grayscale).enhance(2.4)
+    threshold = boosted.point(lambda value: 0 if value < 190 else 255, mode="1").convert("RGB")
+    enlarged = boosted.resize(
+        (max(1, boosted.width * 2), max(1, boosted.height * 2)),
+        resample=Image.Resampling.LANCZOS,
+    ).convert("RGB")
+    threshold_enlarged = threshold.resize(
+        (max(1, threshold.width * 2), max(1, threshold.height * 2)),
+        resample=Image.Resampling.LANCZOS,
+    )
+
+    variants = []
+    for base_label, base_image in (
+        ("boosted", enlarged),
+        ("threshold", threshold_enlarged),
+    ):
+        for angle in (0, 90, 180, 270):
+            rotated = base_image.rotate(angle, expand=True, fillcolor="white")
+            variants.append((f"{base_label}_rot{angle}", rotated))
+
+    return variants
+
+
+def collect_ocr_texts(image):
+    try:
+        import numpy as np
+    except Exception as exc:
+        print(f"[WARN] No se pudo importar numpy para OCR: {exc}")
+        return []
+
+    try:
+        engine = get_ocr_engine()
+    except Exception as exc:
+        print(f"[WARN] No se pudo inicializar RapidOCR: {exc}")
+        return []
+
+    collected = []
+    seen_texts: set[Tuple[str, str]] = set()
+
+    for variant_label, variant_image in build_preview_ocr_variants(image):
+        try:
+            result, _elapsed = engine(np.array(variant_image))
+        except Exception as exc:
+            print(f"[WARN] Fallo OCR en variante {variant_label}: {exc}")
+            continue
+
+        if not result:
+            continue
+
+        for item in result:
+            if not item or len(item) < 2:
+                continue
+            text = str(item[1]).strip()
+            if not text:
+                continue
+            dedupe_key = (variant_label, text)
+            if dedupe_key in seen_texts:
+                continue
+            seen_texts.add(dedupe_key)
+            collected.append((variant_label, text))
+
+    return collected
+
+
+def find_amount_in_ocr_texts(ocr_texts):
+    texts_only = [text for _, text in ocr_texts]
+
+    for index, text in enumerate(texts_only):
+        combined = " ".join(texts_only[index:index + 2]).strip()
+        if not combined:
+            continue
+        if contains_normalized_hint(combined, VALUE_AMOUNT_HINTS):
+            candidates = extract_amount_candidates(combined)
+            if candidates:
+                return max(candidates), combined
+
+    preferred = []
+    fallback = []
+
+    for _variant_label, text in ocr_texts:
+        candidates = extract_amount_candidates(text)
+        if not candidates:
+            continue
+
+        target = preferred if contains_normalized_hint(text, VALUE_AMOUNT_HINTS) or "$" in text else fallback
+        for candidate in candidates:
+            target.append((candidate, text))
+
+    if preferred:
+        preferred.sort(key=lambda item: (-item[0], len(item[1])))
+        return preferred[0]
+
+    if fallback:
+        fallback.sort(key=lambda item: (-item[0], len(item[1])))
+        return fallback[0]
+
+    return None
+
+
+def get_top_level_window(window):
+    try:
+        return window.top_level_parent()
+    except Exception:
+        return window
+
+
+def find_preview_capture_window(root_window, expected_process_name: str | None, timeout: float):
+    root_top_level = get_top_level_window(root_window)
+    root_process_id = get_process_id(root_top_level)
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        foreground_result = get_foreground_window_wrapper("auto")
+        if foreground_result is not None:
+            backend, foreground_window = foreground_result
+            top_level_window = get_top_level_window(foreground_window)
+            process_id = get_process_id(top_level_window)
+            process_matches = process_name_matches(process_id, expected_process_name)
+            same_process = root_process_id is not None and process_id == root_process_id
+
+            if process_matches or same_process:
+                return backend, top_level_window
+
+        if root_process_id is not None:
+            matches = list_visible_windows_for_process(root_process_id, "auto")
+            if matches:
+                return matches[0]
+
+        time.sleep(0.5)
+
+    return "auto", root_top_level
+
+
+def try_extract_preview_amount(root_window, expected_process_name: str | None, tracking_number: str, timeout: float):
+    print(f"[INFO] Esperando la vista previa de reimpresion para OCR. Timeout configurado: {timeout:.0f}s")
+    preview_backend, preview_window = find_preview_capture_window(root_window, expected_process_name, timeout)
+    print_selected_window("Vista previa reimpresion", preview_backend, preview_window)
+
+    image = capture_window_image(preview_window)
+    if image is None:
+        print("[WARN] No se pudo capturar la vista previa para OCR.")
+        return None
+
+    ocr_texts = collect_ocr_texts(image)
+    if not ocr_texts:
+        print("[WARN] OCR no devolvio texto util desde la vista previa.")
+        return None
+
+    amount_match = find_amount_in_ocr_texts(ocr_texts)
+    if amount_match is None:
+        print("[WARN] No se encontro un monto confiable en la vista previa.")
+        print("[INFO] OCR detecto estos textos:")
+        for index, (variant_label, text) in enumerate(ocr_texts[:12]):
+            print(f"[INFO] [{index}] {variant_label}: {text!r}")
+        return None
+
+    amount_value, raw_text = amount_match
+    print(
+        "[INFO] Valor a Cobrar detectado por OCR "
+        f"para guia {tracking_number}: {format_currency_amount(amount_value)} "
+        f"(valor_numerico={amount_value}, texto={raw_text!r})"
+    )
+    return amount_value
+
+
 def main() -> int:
     args = parse_args()
     should_submit = args.submit or args.ensure_main_window or args.open_reprint
@@ -1900,6 +2159,7 @@ def main() -> int:
                     args.reprint_format,
                     args.reprint_window_timeout,
                     args.reprint_modal_timeout,
+                    args.preview_ocr_timeout,
                 ) else 1
             return 0
 
@@ -1947,6 +2207,7 @@ def main() -> int:
                         args.reprint_format,
                         args.reprint_window_timeout,
                         args.reprint_modal_timeout,
+                        args.preview_ocr_timeout,
                     ) else 1
                 return 0
 
@@ -2081,6 +2342,7 @@ def main() -> int:
                     args.reprint_format,
                     args.reprint_window_timeout,
                     args.reprint_modal_timeout,
+                    args.preview_ocr_timeout,
                 ) else 1
         else:
             observe_after_submit(window, process_id, args.title_re, backend, args.post_submit_delay)

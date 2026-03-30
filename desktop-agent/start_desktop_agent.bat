@@ -60,7 +60,7 @@ if errorlevel 1 (
 set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
 
 :ensure_requirements
-"%PYTHON_EXE%" -c "import pywinauto" >nul 2>&1
+"%PYTHON_EXE%" -c "import pywinauto, rapidocr_onnxruntime, PIL" >nul 2>&1
 if not errorlevel 1 exit /b 0
 
 echo [INFO] Instalando dependencias de desktop-agent...
