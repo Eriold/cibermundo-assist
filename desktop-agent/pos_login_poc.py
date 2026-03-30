@@ -63,6 +63,7 @@ VALUE_AMOUNT_HINTS = ("valor a cobrar", "valor cobrar", "cobrar", "valor")
 DEFAULT_REPRINT_TRACKING_NUMBER = "240048399888"
 DEFAULT_REPRINT_FORMAT = "TIRILLA"
 DEFAULT_PREVIEW_OCR_TIMEOUT = 20.0
+DEFAULT_PREVIEW_READY_DELAY = 3.0
 APP_PATH_ENV_KEYS = ("POS_EXE_PATH",)
 USERNAME_ENV_KEYS = ("POS_USER", "APX_USER")
 PASSWORD_ENV_KEYS = ("POS_PASS", "APX_PASS")
@@ -249,6 +250,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=DEFAULT_PREVIEW_OCR_TIMEOUT,
         help="Segundos maximos para esperar la vista previa y leer Valor a Cobrar por OCR.",
+    )
+    parser.add_argument(
+        "--preview-ready-delay",
+        type=float,
+        default=DEFAULT_PREVIEW_READY_DELAY,
+        help="Segundos de espera fija despues de Aceptar antes de intentar capturar la vista previa.",
     )
     return parser.parse_args()
 
@@ -1596,6 +1603,7 @@ def complete_reprint_flow(
     reprint_window_timeout: float,
     reprint_modal_timeout: float,
     preview_ocr_timeout: float,
+    preview_ready_delay: float,
 ) -> bool:
     if not open_reprint_guides(main_window):
         return False
@@ -1676,6 +1684,12 @@ def complete_reprint_flow(
         return False
 
     print(f"[INFO] Modal aceptado usando estrategia: {accept_strategy}")
+    if preview_ready_delay > 0:
+        print(
+            "[INFO] Esperando a que la vista previa termine de renderizar "
+            f"antes del OCR: {preview_ready_delay:.1f}s"
+        )
+        time.sleep(preview_ready_delay)
     try_extract_preview_amount(main_window, expected_process_name, tracking_number, preview_ocr_timeout)
     return True
 
@@ -2310,6 +2324,7 @@ def main() -> int:
                     args.reprint_window_timeout,
                     args.reprint_modal_timeout,
                     args.preview_ocr_timeout,
+                    args.preview_ready_delay,
                 ) else 1
             return 0
 
@@ -2358,6 +2373,7 @@ def main() -> int:
                         args.reprint_window_timeout,
                         args.reprint_modal_timeout,
                         args.preview_ocr_timeout,
+                        args.preview_ready_delay,
                     ) else 1
                 return 0
 
@@ -2493,6 +2509,7 @@ def main() -> int:
                     args.reprint_window_timeout,
                     args.reprint_modal_timeout,
                     args.preview_ocr_timeout,
+                    args.preview_ready_delay,
                 ) else 1
         else:
             observe_after_submit(window, process_id, args.title_re, backend, args.post_submit_delay)
