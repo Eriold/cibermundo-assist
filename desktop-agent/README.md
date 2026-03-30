@@ -115,6 +115,7 @@ python .\pos_login_poc.py `
 Eso hace:
 
 - primero intenta detectar la ventana principal autenticada
+- prioriza la deteccion por el ejecutable `PosWPF.Cliente.exe`
 - si ya esta abierta, no relanza ni reloguea el POS
 - si no esta abierta, intenta login
 - espera hasta 20 minutos a que cargue la ventana principal

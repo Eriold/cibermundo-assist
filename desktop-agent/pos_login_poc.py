@@ -22,6 +22,7 @@ DEFAULT_TITLE_RE = r".*(Interrapidisimo|POS).*"
 DEFAULT_RAW_TITLE_RE = r".*POS INTERRAPIDISIMO.*"
 DEFAULT_BUTTON_TITLE_RE = r"(?i).*(entrar|ingresar|login|aceptar).*"
 DEFAULT_MAIN_WINDOW_TITLE_RE = r".*POS INTERRAPIDISIMO.*"
+DEFAULT_MAIN_PROCESS_NAME = "PosWPF.Cliente.exe"
 ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 LOCAL_ENV_PATH = Path(__file__).resolve().parent / ".env"
 LAUNCHABLE_SUFFIXES = (".appref-ms", ".lnk", ".exe")
@@ -37,6 +38,8 @@ kernel32 = ctypes.windll.kernel32
 USERNAME_AUTO_IDS = ("LoginPos_txtUsername",)
 PASSWORD_AUTO_IDS = ("LoginPos_txtPassword",)
 LOGIN_BUTTON_AUTO_IDS = ("LoginPos_btnLogin",)
+LOGIN_ACTION_HINTS = ("entrar", "ingresar", "login", "aceptar")
+EXIT_HINTS = ("salir",)
 MAIN_WINDOW_HINTS = (
     "facturar",
     "cajas",
@@ -86,6 +89,11 @@ def parse_args() -> argparse.Namespace:
         "--main-title-re",
         default=DEFAULT_MAIN_WINDOW_TITLE_RE,
         help="Regex para detectar la ventana principal autenticada del POS.",
+    )
+    parser.add_argument(
+        "--main-process-name",
+        default=DEFAULT_MAIN_PROCESS_NAME,
+        help="Nombre del ejecutable asociado a la ventana principal autenticada.",
     )
     parser.add_argument(
         "--hwnd",
@@ -378,8 +386,21 @@ def score_candidate_window(window) -> Tuple[int, int, int, str]:
     return (class_penalty, -visible_edits, -login_hints, window.window_text().lower())
 
 
-def is_authenticated_main_window(window) -> bool:
-    return count_main_window_hints(window) > 0 and count_visible_edits(window) == 0
+def process_name_matches(process_id: int | None, expected_process_name: str | None) -> bool:
+    if not expected_process_name:
+        return False
+
+    image_name = get_process_image_name(process_id)
+    if not image_name:
+        return False
+
+    return normalize_text(image_name) == normalize_text(expected_process_name)
+
+
+def is_authenticated_main_window(window, expected_process_name: str | None = None) -> bool:
+    process_id = get_process_id(window)
+    process_match = process_name_matches(process_id, expected_process_name)
+    return (process_match or count_main_window_hints(window) > 0) and count_visible_edits(window) == 0
 
 
 def is_login_window(window) -> bool:
@@ -393,11 +414,24 @@ def score_main_window(window) -> Tuple[int, int, int, str]:
     return (class_penalty, -main_hints, visible_edits, window.window_text().lower())
 
 
-def find_main_window(title_re: str, selected_backend: str):
+def find_main_window(title_re: str, selected_backend: str, expected_process_name: str | None = None):
+    raw_hwnd = find_raw_window_handle(title_re)
+    if raw_hwnd is not None:
+        try:
+            backend, window = connect_window_by_handle(raw_hwnd, selected_backend)
+            if not is_login_window(window) and is_authenticated_main_window(window, expected_process_name):
+                try:
+                    window.set_focus()
+                except Exception:
+                    pass
+                return backend, window
+        except Exception:
+            pass
+
     candidates = []
 
     for backend, window in list_matching_windows(title_re, selected_backend):
-        if not is_authenticated_main_window(window):
+        if not is_authenticated_main_window(window, expected_process_name):
             continue
         candidates.append((backend, window))
 
@@ -697,8 +731,11 @@ def describe_top_window(window, backend: str, index: int | None = None) -> str:
     rect = window.rectangle()
     prefix = f"[{index}] " if index is not None else ""
     process_id = "-"
+    process_name = "-"
     try:
-        process_id = str(window.process_id())
+        process_id_value = int(window.process_id())
+        process_id = str(process_id_value)
+        process_name = get_process_image_name(process_id_value) or "-"
     except Exception:
         pass
     return (
@@ -707,6 +744,7 @@ def describe_top_window(window, backend: str, index: int | None = None) -> str:
         f"title={window.window_text()!r} "
         f"class={get_window_class_name(window) or '-'} "
         f"pid={process_id} "
+        f"process={process_name} "
         f"visible={is_control_visible(window)} "
         f"enabled={is_control_enabled(window)} "
         f"visible_edits={count_visible_edits(window)} "
@@ -804,6 +842,16 @@ def find_control_by_auto_ids(window, auto_ids: Sequence[str], control_type: str)
     return None
 
 
+def control_matches_hints(control, hints: Sequence[str]) -> bool:
+    fragments = [
+        get_control_text(control),
+        get_control_auto_id(control),
+        get_control_class_name(control),
+        get_control_type_name(control),
+    ]
+    return any(contains_normalized_hint(fragment, hints) for fragment in fragments)
+
+
 def set_text(control, value: str) -> None:
     try:
         control.click_input()
@@ -832,10 +880,60 @@ def set_text(control, value: str) -> None:
     control.type_keys(value, with_spaces=True, set_foreground=True)
 
 
+def control_center(control) -> Tuple[float, float]:
+    rect = control.rectangle()
+    return ((rect.left + rect.right) / 2.0, (rect.top + rect.bottom) / 2.0)
+
+
+def control_distance(first, second) -> float:
+    first_x, first_y = control_center(first)
+    second_x, second_y = control_center(second)
+    return abs(first_x - second_x) + abs(first_y - second_y)
+
+
+def find_button_near_label(window, label_hints: Sequence[str], buttons: Sequence):
+    label_candidates = []
+
+    try:
+        all_controls = dedupe_controls(window.descendants())
+    except Exception:
+        all_controls = []
+
+    for control in all_controls:
+        if not is_control_visible(control):
+            continue
+        if not control_matches_hints(control, label_hints):
+            continue
+        label_candidates.append(control)
+
+    if not label_candidates or not buttons:
+        return None
+
+    best_pair = None
+    for label in label_candidates:
+        for button in buttons:
+            distance = control_distance(label, button)
+            if best_pair is None or distance < best_pair[0]:
+                best_pair = (distance, button)
+
+    if best_pair is None:
+        return None
+
+    return best_pair[1]
+
+
 def find_login_button(window, button_title_re: str):
     control = find_control_by_auto_ids(window, LOGIN_BUTTON_AUTO_IDS, "Button")
     if control is not None:
         return control
+
+    for auto_id in LOGIN_BUTTON_AUTO_IDS:
+        try:
+            control = window.child_window(auto_id=auto_id).wrapper_object()
+            if is_control_visible(control) and is_control_enabled(control):
+                return control
+        except Exception:
+            continue
 
     try:
         return window.child_window(title_re=button_title_re, control_type="Button").wrapper_object()
@@ -862,8 +960,35 @@ def find_login_button(window, button_title_re: str):
     buttons = dedupe_controls(buttons)
     buttons.sort(key=control_rect_key)
 
-    if buttons:
-        return buttons[-1]
+    visible_buttons = [
+        button
+        for button in buttons
+        if is_control_visible(button) and is_control_enabled(button)
+    ]
+
+    non_exit_buttons = [
+        button
+        for button in visible_buttons
+        if not control_matches_hints(button, EXIT_HINTS)
+    ]
+
+    if non_exit_buttons:
+        login_buttons = [
+            button
+            for button in non_exit_buttons
+            if control_matches_hints(button, LOGIN_ACTION_HINTS)
+        ]
+        if login_buttons:
+            return login_buttons[0]
+
+        button_near_label = find_button_near_label(window, LOGIN_ACTION_HINTS, non_exit_buttons)
+        if button_near_label is not None:
+            return button_near_label
+
+        return non_exit_buttons[-1]
+
+    if visible_buttons:
+        return visible_buttons[-1]
 
     return None
 
@@ -914,6 +1039,32 @@ def get_process_status(process_id: int | None) -> str:
         return f"exited(code={int(exit_code.value)})"
     except Exception as exc:
         return f"error({exc})"
+    finally:
+        if process_handle:
+            try:
+                kernel32.CloseHandle(process_handle)
+            except Exception:
+                pass
+
+
+def get_process_image_name(process_id: int | None) -> str | None:
+    if process_id is None:
+        return None
+
+    process_handle = None
+    try:
+        process_handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, process_id)
+        if not process_handle:
+            return None
+
+        buffer_size = ctypes.c_ulong(2048)
+        buffer = ctypes.create_unicode_buffer(buffer_size.value)
+        if not kernel32.QueryFullProcessImageNameW(process_handle, 0, buffer, ctypes.byref(buffer_size)):
+            return None
+
+        return os.path.basename(buffer.value)
+    except Exception:
+        return None
     finally:
         if process_handle:
             try:
@@ -1011,12 +1162,17 @@ def try_activate_control(control, label: str) -> str | None:
     return None
 
 
-def wait_for_main_window(title_re: str, selected_backend: str, timeout: float):
+def wait_for_main_window(
+    title_re: str,
+    selected_backend: str,
+    timeout: float,
+    expected_process_name: str | None = None,
+):
     deadline = time.time() + timeout
     next_progress_log = time.time()
 
     while time.time() < deadline:
-        result = find_main_window(title_re, selected_backend)
+        result = find_main_window(title_re, selected_backend, expected_process_name)
         if result is not None:
             return result
 
@@ -1213,6 +1369,9 @@ def print_selected_window(label: str, backend: str, window) -> int | None:
     process_id = get_process_id(window)
     if process_id is not None:
         print(f"[INFO] PID ventana: {process_id}")
+        process_name = get_process_image_name(process_id)
+        if process_name:
+            print(f"[INFO] Proceso ventana: {process_name}")
     return process_id
 
 
@@ -1242,7 +1401,11 @@ def main() -> int:
     app_path_input, app_path_source = resolve_app_path_input(args)
 
     if args.ensure_main_window or args.open_reprint:
-        existing_main_window = find_main_window(args.main_title_re, args.backend)
+        existing_main_window = find_main_window(
+            args.main_title_re,
+            args.backend,
+            args.main_process_name,
+        )
         if existing_main_window is not None:
             backend, window = existing_main_window
             print("[INFO] La ventana principal del POS ya estaba abierta.")
@@ -1277,7 +1440,11 @@ def main() -> int:
             time.sleep(args.startup_delay)
 
         if args.ensure_main_window or args.open_reprint:
-            existing_main_window = find_main_window(args.main_title_re, args.backend)
+            existing_main_window = find_main_window(
+                args.main_title_re,
+                args.backend,
+                args.main_process_name,
+            )
             if existing_main_window is not None:
                 backend, window = existing_main_window
                 print("[INFO] La ventana principal aparecio sin necesidad de reloguear.")
@@ -1399,6 +1566,7 @@ def main() -> int:
                     args.main_title_re,
                     args.backend,
                     args.main_window_timeout,
+                    args.main_process_name,
                 )
             except TimeoutError as exc:
                 print(f"[WARN] {exc}")
