@@ -909,6 +909,43 @@ def set_text(control, value: str) -> None:
     control.type_keys(value, with_spaces=True, set_foreground=True)
 
 
+def set_reprint_tracking_number(control, tracking_number: str) -> str | None:
+    strategies = [
+        (
+            "manual_right_backspace_type",
+            lambda current: (
+                current.click_input(),
+                focus_control(current),
+                current.type_keys("{RIGHT}", set_foreground=True),
+                current.type_keys("{BACKSPACE}", set_foreground=True),
+                current.type_keys(tracking_number, with_spaces=True, set_foreground=True),
+            ),
+        ),
+        (
+            "ctrl_a_backspace_type",
+            lambda current: (
+                current.click_input(),
+                focus_control(current),
+                current.type_keys("^a{BACKSPACE}", set_foreground=True),
+                current.type_keys(tracking_number, with_spaces=True, set_foreground=True),
+            ),
+        ),
+        (
+            "set_text_fallback",
+            lambda current: set_text(current, tracking_number),
+        ),
+    ]
+
+    for strategy_name, strategy in strategies:
+        try:
+            strategy(control)
+            return strategy_name
+        except Exception as exc:
+            print(f"[WARN] Fallo carga de guia con estrategia {strategy_name}: {exc}")
+
+    return None
+
+
 def control_center(control) -> Tuple[float, float]:
     rect = control.rectangle()
     return ((rect.left + rect.right) / 2.0, (rect.top + rect.bottom) / 2.0)
@@ -1499,8 +1536,11 @@ def complete_reprint_flow(
         return False
 
     print(f"[INFO] Campo Numero detectado: {describe_control(number_edit)}")
-    set_text(number_edit, tracking_number)
-    print(f"[INFO] Numero de guia cargado: {tracking_number}")
+    tracking_strategy = set_reprint_tracking_number(number_edit, tracking_number)
+    if tracking_strategy is None:
+        print("[ERROR] No se pudo cargar el numero de guia en Reimpresion Guia.")
+        return False
+    print(f"[INFO] Numero de guia cargado: {tracking_number} usando estrategia: {tracking_strategy}")
 
     search_button = find_search_button(reprint_window)
     if search_button is None:
