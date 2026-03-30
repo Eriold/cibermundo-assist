@@ -2024,6 +2024,15 @@ def extract_amount_candidates(text: str) -> List[int]:
     return candidates
 
 
+def crop_by_ratio(image, left: float, top: float, right: float, bottom: float):
+    width, height = image.size
+    crop_left = max(0, min(width - 1, int(width * left)))
+    crop_top = max(0, min(height - 1, int(height * top)))
+    crop_right = max(crop_left + 1, min(width, int(width * right)))
+    crop_bottom = max(crop_top + 1, min(height, int(height * bottom)))
+    return image.crop((crop_left, crop_top, crop_right, crop_bottom))
+
+
 def build_preview_ocr_variants(image):
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
@@ -2055,27 +2064,56 @@ def build_preview_ocr_variants(image):
         (max(1, full_rgb.width * 2), max(1, full_rgb.height * 2)),
         resample=Image.Resampling.LANCZOS,
     )
+    value_region_wide = crop_by_ratio(content_rgb, 0.08, 0.18, 0.48, 0.86)
+    value_region_tight = crop_by_ratio(content_rgb, 0.12, 0.28, 0.40, 0.76)
+    value_region_wide_enlarged = value_region_wide.resize(
+        (max(1, value_region_wide.width * 3), max(1, value_region_wide.height * 3)),
+        resample=Image.Resampling.LANCZOS,
+    )
+    value_region_tight_enlarged = value_region_tight.resize(
+        (max(1, value_region_tight.width * 3), max(1, value_region_tight.height * 3)),
+        resample=Image.Resampling.LANCZOS,
+    )
+    value_region_boosted = ImageEnhance.Contrast(
+        ImageOps.autocontrast(ImageOps.grayscale(value_region_wide))
+    ).enhance(2.8).resize(
+        (max(1, value_region_wide.width * 3), max(1, value_region_wide.height * 3)),
+        resample=Image.Resampling.LANCZOS,
+    ).convert("RGB")
 
     variants = []
     for base_label, base_image in (
+        ("value_tight", value_region_tight_enlarged),
+        ("value_wide", value_region_wide_enlarged),
+        ("value_boosted", value_region_boosted),
         ("full", full_enlarged),
         ("content", content_enlarged),
         ("boosted", enlarged),
         ("threshold", threshold_enlarged),
     ):
-        for angle in (0, 90, 180, 270):
+        if base_label.startswith("value_"):
+            angles = (90, 270, 0)
+        elif base_label in ("boosted", "threshold"):
+            angles = (90, 270)
+        else:
+            angles = (0, 90, 270)
+
+        for angle in angles:
             rotated = base_image.rotate(angle, expand=True, fillcolor="white")
             variants.append((f"{base_label}_rot{angle}", rotated))
 
     return variants
 
 
-def collect_ocr_texts(captured_images):
+def collect_ocr_texts(captured_images, deadline: float | None = None):
     collected = []
     seen_texts: set[Tuple[str, str]] = set()
 
     for capture_label, image in captured_images:
         for variant_label, variant_image in build_preview_ocr_variants(image):
+            if deadline is not None and time.time() >= deadline:
+                return collected
+
             windows_text = run_windows_ocr_on_image(variant_image)
             if not windows_text:
                 continue
@@ -2089,6 +2127,9 @@ def collect_ocr_texts(captured_images):
                     continue
                 seen_texts.add(dedupe_key)
                 collected.append((f"{capture_label}:{variant_label}", text))
+
+            if find_amount_in_ocr_texts(collected) is not None:
+                return collected
 
     if collected:
         return collected
@@ -2107,6 +2148,9 @@ def collect_ocr_texts(captured_images):
 
     for capture_label, image in captured_images:
         for variant_label, variant_image in build_preview_ocr_variants(image):
+            if deadline is not None and time.time() >= deadline:
+                return collected
+
             try:
                 result, _elapsed = engine(np.array(variant_image))
             except Exception as exc:
@@ -2127,6 +2171,9 @@ def collect_ocr_texts(captured_images):
                     continue
                 seen_texts.add(dedupe_key)
                 collected.append((f"{capture_label}:{variant_label}", text))
+
+            if find_amount_in_ocr_texts(collected) is not None:
+                return collected
 
     return collected
 
@@ -2237,7 +2284,7 @@ def try_extract_preview_amount(root_window, expected_process_name: str | None, t
             time.sleep(1.0)
             continue
 
-        ocr_texts = collect_ocr_texts(captured_images)
+        ocr_texts = collect_ocr_texts(captured_images, deadline=deadline)
         last_ocr_texts = ocr_texts
         amount_match = find_amount_in_ocr_texts(ocr_texts)
         if amount_match is not None:
