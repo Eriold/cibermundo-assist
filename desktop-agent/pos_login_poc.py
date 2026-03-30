@@ -31,12 +31,15 @@ PREFERRED_APP_NAMES = (
 EXPLORER_CLASS_NAMES = {"CabinetWClass", "ExploreWClass"}
 LOGIN_HINT_TEXTS = ("usuario", "password", "contraseña", "entrar")
 user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
 USERNAME_AUTO_IDS = ("LoginPos_txtUsername",)
 PASSWORD_AUTO_IDS = ("LoginPos_txtPassword",)
 LOGIN_BUTTON_AUTO_IDS = ("LoginPos_btnLogin",)
 APP_PATH_ENV_KEYS = ("POS_EXE_PATH",)
 USERNAME_ENV_KEYS = ("POS_USER", "APX_USER")
 PASSWORD_ENV_KEYS = ("POS_PASS", "APX_PASS")
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+STILL_ACTIVE = 259
 
 
 def parse_args() -> argparse.Namespace:
@@ -758,6 +761,52 @@ def get_window_handle(control) -> int | None:
         return None
 
 
+def get_process_id(control) -> int | None:
+    try:
+        process_id = int(control.process_id())
+        return process_id if process_id > 0 else None
+    except Exception:
+        return None
+
+
+def get_process_id_raw(hwnd: int) -> int | None:
+    process_id = ctypes.c_ulong()
+    try:
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+    except Exception:
+        return None
+
+    return int(process_id.value) if process_id.value else None
+
+
+def get_process_status(process_id: int | None) -> str:
+    if process_id is None:
+        return "unknown"
+
+    process_handle = None
+    try:
+        process_handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, process_id)
+        if not process_handle:
+            return "not_running_or_access_denied"
+
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(process_handle, ctypes.byref(exit_code)):
+            return "unable_to_read_exit_code"
+
+        if int(exit_code.value) == STILL_ACTIVE:
+            return "running"
+
+        return f"exited(code={int(exit_code.value)})"
+    except Exception as exc:
+        return f"error({exc})"
+    finally:
+        if process_handle:
+            try:
+                kernel32.CloseHandle(process_handle)
+            except Exception:
+                pass
+
+
 def focus_control(control) -> None:
     try:
         control.set_focus()
@@ -815,7 +864,88 @@ def print_post_submit_snapshot(title_re: str, selected_backend: str) -> None:
         print(f"[INFO] {describe_top_window(window, backend, index)}")
 
 
-def observe_after_submit(window, title_re: str, selected_backend: str, delay_seconds: float) -> None:
+def list_visible_windows_for_process(process_id: int, selected_backend: str):
+    matches = []
+
+    for backend in backend_candidates(selected_backend):
+        try:
+            desktop = Desktop(backend=backend)
+            for spec in desktop.windows():
+                try:
+                    wrapper = spec.wrapper_object()
+                except Exception:
+                    continue
+
+                if not is_control_visible(wrapper):
+                    continue
+
+                try:
+                    wrapper_pid = int(wrapper.process_id())
+                except Exception:
+                    continue
+
+                if wrapper_pid != process_id:
+                    continue
+
+                matches.append((backend, wrapper))
+        except Exception:
+            continue
+
+    matches.sort(key=lambda item: score_candidate_window(item[1]))
+    return matches
+
+
+def print_process_windows_snapshot(process_id: int | None, selected_backend: str) -> None:
+    if process_id is None:
+        print("[INFO] No se pudo determinar el PID del POS para inspeccion posterior.")
+        return
+
+    matches = list_visible_windows_for_process(process_id, selected_backend)
+    if not matches:
+        print(f"[INFO] No hay ventanas top-level visibles para el proceso PID={process_id} despues del submit.")
+        return
+
+    print(f"[INFO] Ventanas visibles del mismo proceso PID={process_id}:")
+    for index, (backend, window) in enumerate(matches[:8]):
+        print(f"[INFO] {describe_top_window(window, backend, index)}")
+
+
+def print_process_status_snapshot(process_id: int | None) -> None:
+    if process_id is None:
+        print("[INFO] No se pudo determinar el estado del proceso del POS.")
+        return
+
+    status = get_process_status(process_id)
+    print(f"[INFO] Estado del proceso PID={process_id} despues del submit: {status}")
+
+
+def print_foreground_window_snapshot() -> None:
+    try:
+        hwnd = int(user32.GetForegroundWindow())
+    except Exception:
+        hwnd = 0
+
+    if not hwnd:
+        print("[INFO] No se pudo determinar la ventana en primer plano despues del submit.")
+        return
+
+    title = get_window_text_raw(hwnd)
+    class_name = get_class_name_raw(hwnd)
+    process_id = get_process_id_raw(hwnd)
+    is_visible = bool(user32.IsWindowVisible(hwnd))
+    print(
+        "[INFO] Ventana en primer plano despues del submit: "
+        f"hwnd={hwnd} title={title!r} class={class_name or '-'} pid={process_id or '-'} visible={is_visible}"
+    )
+
+
+def observe_after_submit(
+    window,
+    original_process_id: int | None,
+    title_re: str,
+    selected_backend: str,
+    delay_seconds: float,
+) -> None:
     if delay_seconds > 0:
         print(f"[INFO] Observando el POS durante {delay_seconds:.1f}s despues del submit...")
         time.sleep(delay_seconds)
@@ -827,6 +957,9 @@ def observe_after_submit(window, title_re: str, selected_backend: str, delay_sec
     else:
         print("[INFO] La ventana original del login ya no existe despues del submit.")
 
+    print_foreground_window_snapshot()
+    print_process_status_snapshot(original_process_id)
+    print_process_windows_snapshot(original_process_id, selected_backend)
     print_post_submit_snapshot(title_re, selected_backend)
 
 
@@ -890,6 +1023,9 @@ def main() -> int:
     print(f"[INFO] Ventana detectada con backend={backend}")
     print(f"[INFO] Titulo ventana: {window.window_text()!r}")
     print(f"[INFO] Clase ventana: {get_window_class_name(window) or '-'}")
+    process_id = get_process_id(window)
+    if process_id is not None:
+        print(f"[INFO] PID ventana login: {process_id}")
 
     if args.print_controls:
         print()
@@ -962,7 +1098,7 @@ def main() -> int:
                 print("[ERROR] No se pudo disparar el login ni con boton ni con Enter.")
                 return 1
 
-        observe_after_submit(window, args.title_re, backend, args.post_submit_delay)
+        observe_after_submit(window, process_id, args.title_re, backend, args.post_submit_delay)
     else:
         print("[INFO] Credenciales cargadas. No se envio login porque no se paso --submit.")
 

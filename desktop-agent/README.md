@@ -100,6 +100,14 @@ Si quieres dejar mas tiempo de observacion despues del login:
 python .\pos_login_poc.py --submit --post-submit-delay 15
 ```
 
+En la siguiente validacion post-login fijate sobre todo en estas lineas de consola:
+
+- `PID ventana login: ...`
+- `Ventana en primer plano despues del submit: ...`
+- `Estado del proceso PID=... despues del submit: ...`
+- `Ventanas visibles del mismo proceso PID=...`
+- `No hay ventanas top-level visibles para el proceso ...`
+
 ## Override manual opcional
 
 Si alguna vez quieres probar otras credenciales sin tocar `.env`, puedes sobrescribirlas:
