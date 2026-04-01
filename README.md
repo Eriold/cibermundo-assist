@@ -150,4 +150,4 @@ Con esta configuracion local se puede trabajar UI, filtros, historial y pruebas 
 
 - El `README` describe la idea general y la estructura actual del proyecto.
 - La memoria operativa mas detallada esta en `_agent/PROJECT_MEMORY.md`.
-- La carpeta `_agent/archived_otro_backend/` contiene contexto historico y no debe tomarse como fuente principal del estado actual.
+- El estado vigente del POC de POS esta en `_agent/ESTADO_POC_POS_WINDOWS_2026-03-30.md` y en `desktop-agent/`.
